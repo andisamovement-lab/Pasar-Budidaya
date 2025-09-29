@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Pasar Budidaya — Menghubungkan petani dan peternak ke khalayak ramai</title>
 <meta name="description" content="Pasar Budidaya — marketplace sederhana untuk menghubungkan petani & peternak dengan pembeli.">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://www.gstatic.com https://cdn.tailwindcss.com https://cdn.emailjs.com https://iili.io https://res.cloudinary.com; script-src 'self' https://www.gstatic.com https://cdn.tailwindcss.com https://cdn.emailjs.com 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; img-src 'self' data: https://iili.io https://res.cloudinary.com https://lh3.googleusercontent.com https://drive.google.com; connect-src 'self' https://*.firebaseio.com https://api.cloudinary.com https://andisamovement-lab.github.io https://www.googleapis.com https://cdn.emailjs.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-ancestors 'none'; base-uri 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://www.gstatic.com https://cdn.tailwindcss.com https://cdn.emailjs.com https://iili.io https://res.cloudinary.com; script-src 'self' https://www.gstatic.com https://cdn.tailwindcss.com https://cdn.emailjs.com 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; img-src 'self' data: https://iili.io https://res.cloudinary.com https://lh3.googleusercontent.com https://drive.google.com; connect-src 'self' https://*.firebaseio.com https://api.cloudinary.com https://pasar-budidaya-default-rtdb.asia-southeast1.firebasedatabase.app https://andisamovement-lab.github.io https://www.googleapis.com https://cdn.emailjs.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-ancestors 'none'; base-uri 'self';">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="permissions-policy" content="geolocation=(), camera=(), microphone=()">
@@ -205,7 +205,15 @@ listingForm.addEventListener('submit',async e=>{
   if(imageUrl) data.imageUrl=imageUrl;
 
   if(editingKey){ await set(ref(db,'listings/'+editingKey),data); }
-  else{ await push(ref(db,'listings'),data); }
+  else{
+  try {
+    await push(ref(db,'listings'),data);
+    alert("Listing berhasil disimpan!");
+  } catch(err) {
+    alert("Gagal simpan listing: " + err.message);
+    console.error(err);
+  }
+}
 
   listingForm.reset(); document.getElementById('editingKey').value='';
   loadAdminList(); renderPublicList();
@@ -295,14 +303,19 @@ document.getElementById('searchBtn').addEventListener('click',handleSearch);
 document.getElementById('searchInput').addEventListener('keypress',e=>{if(e.key==='Enter') handleSearch();});
 async function handleSearch(){
   const query=document.getElementById('searchInput').value.toLowerCase().trim();
-  const listArea=document.getElementById('listArea'); listArea.innerHTML='';
-  const snap=await get(child(db,'listings')); if(!snap.exists()) return;
+  const listArea=document.getElementById('listArea'); 
+  listArea.innerHTML='';
+
+  const snap=await get(ref(db, 'listings')); // ✅ perbaikan di sini
+  if(!snap.exists()) return;
+
   const data=snap.val();
   Object.keys(data).forEach(key=>{
     const item=data[key];
     const title=(item.title||'').toLowerCase();
     const description=(item.description||'').toLowerCase();
     const kecamatan=(item.kecamatan||'').toLowerCase();
+
     if(title.includes(query)||description.includes(query)||kecamatan.includes(query)){
       const card=document.createElement('div');
       card.className='border rounded-lg p-3 bg-white shadow';
@@ -320,6 +333,7 @@ async function handleSearch(){
     }
   });
 }
+
 </script>
 </body>
 </html>
