@@ -213,66 +213,82 @@ listingForm.addEventListener('submit',async e=>{
 
 // ======= LOAD ADMIN LIST =======
 async function loadAdminList(){
-  const area=document.getElementById('adminListArea'); area.innerHTML='';
-  const snap=await get(child(db,'listings')); if(!snap.exists()) return;
-  const data=snap.val();
-  Object.keys(data).forEach(key=>{
-    const item=data[key];
-    const div=document.createElement('div');
-    div.className='border rounded p-2 flex justify-between items-center';
-    div.innerHTML=`<span>${sanitizeHTML(item.title)}</span>
+  const area = document.getElementById('adminListArea'); 
+  area.innerHTML = '';
+
+  const snap = await get(ref(db, 'listings')); 
+  if (!snap.exists()) return;
+
+  const data = snap.val();
+  Object.keys(data).forEach(key => {
+    const item = data[key];
+    const div = document.createElement('div');
+    div.className = 'border rounded p-2 flex justify-between items-center';
+    div.innerHTML = `
+      <span>${sanitizeHTML(item.title)}</span>
       <div class="flex gap-1">
-      <button class="px-2 py-1 bg-yellow-400 text-white rounded text-xs editBtn">Edit</button>
-      <button class="px-2 py-1 bg-red-600 text-white rounded text-xs deleteBtn">Hapus</button>
+        <button class="px-2 py-1 bg-yellow-400 text-white rounded text-xs editBtn">Edit</button>
+        <button class="px-2 py-1 bg-red-600 text-white rounded text-xs deleteBtn">Hapus</button>
       </div>`;
-    div.querySelector('.editBtn').addEventListener('click',()=>{
-      document.getElementById('listingTitle').value=item.title;
-      document.getElementById('listingDesc').value=item.description;
-      document.getElementById('listingKec').value=item.kecamatan;
-      document.getElementById('listingPrice').value=item.price;
-      document.getElementById('listingWA').value=item.whatsapp||'';
-      document.getElementById('listingFB').value=item.facebook||'';
-      document.getElementById('listingIG').value=item.instagram||'';
-      document.getElementById('editingKey').value=key;
+    
+    // Edit
+    div.querySelector('.editBtn').addEventListener('click', () => {
+      document.getElementById('listingTitle').value = item.title;
+      document.getElementById('listingDesc').value = item.description;
+      document.getElementById('listingKec').value = item.kecamatan;
+      document.getElementById('listingPrice').value = item.price;
+      document.getElementById('listingWA').value = item.whatsapp || '';
+      document.getElementById('listingFB').value = item.facebook || '';
+      document.getElementById('listingIG').value = item.instagram || '';
+      document.getElementById('editingKey').value = key;
     });
-    div.querySelector('.deleteBtn').addEventListener('click',async ()=>{
-      if(confirm('Hapus listing ini?')){ await remove(ref(db,'listings/'+key)); loadAdminList(); renderPublicList(); }
+
+    // Hapus
+    div.querySelector('.deleteBtn').addEventListener('click', async () => {
+      if (confirm('Hapus listing ini?')) {
+        await remove(ref(db, 'listings/' + key));
+        loadAdminList();
+      }
     });
+
     area.appendChild(div);
   });
 }
 
+
 // ======= RENDER PUBLIC LIST =======
-async function renderPublicList(){
-  const listArea=document.getElementById('listArea'); listArea.innerHTML='';
-  const snap=await get(child(db,'listings')); if(!snap.exists()) return;
-  const data=snap.val();
-  Object.keys(data).forEach(key=>{
-    const item=data[key];
-    const title = sanitizeHTML(item.title||'');
-    const description = sanitizeHTML(item.description||'');
-    const kecamatan = sanitizeHTML(item.kecamatan||'');
-    const price = sanitizeHTML(item.price||'');
-    const whatsapp = (item.whatsapp||'').replace(/\D/g,'');
-    const facebook = normalizeFacebookUrl(item.facebook||'');
-    const instagram = sanitizeInstagramUsername(item.instagram||'');
-    const imageUrl=item.imageUrl||'https://iili.io/K0Uz11e.md.png';
-    const card=document.createElement('div');
-    card.className='border rounded-lg p-3 bg-white shadow';
-    card.innerHTML=`
-      <img src="${imageUrl}" alt="${title}" class="w-full h-40 object-cover rounded mb-2">
-      <h3 class="font-semibold">${title}</h3>
-      <p class="text-sm">${description}</p>
-      <p class="text-xs text-gray-500">Kecamatan: ${kecamatan} | Harga: ${price}</p>
-      <div class="flex gap-2 mt-2">
-        ${whatsapp?`<a href="https://wa.me/${whatsapp}" target="_blank" class="social-btn bg-green-100 text-green-700">WA</a>`:''}
-        ${facebook?`<a href="${facebook}" target="_blank" class="social-btn bg-blue-100 text-blue-700">FB</a>`:''}
-        ${instagram?`<a href="https://instagram.com/${instagram}" target="_blank" class="social-btn insta-grad">IG</a>`:''}
-      </div>`;
-    listArea.appendChild(card);
+function renderPublicList(){
+  const listArea = document.getElementById('listArea');
+
+  onValue(ref(db, 'listings'), (snap) => {
+    listArea.innerHTML = '';
+    if (!snap.exists()) return;
+
+    const data = snap.val();
+    Object.keys(data).forEach(key => {
+      const item = data[key];
+      const card = document.createElement('div');
+      card.className = 'border rounded-lg p-3 bg-white shadow';
+      card.innerHTML = `
+        <img src="${item.imageUrl || 'https://iili.io/K0Uz11e.md.png'}" 
+             alt="${sanitizeHTML(item.title)}" 
+             class="w-full h-40 object-cover rounded mb-2">
+        <h3 class="font-semibold">${sanitizeHTML(item.title)}</h3>
+        <p class="text-sm">${sanitizeHTML(item.description)}</p>
+        <p class="text-xs text-gray-500">Kecamatan: ${sanitizeHTML(item.kecamatan)} | Harga: ${sanitizeHTML(item.price)}</p>
+        <div class="flex gap-2 mt-2">
+          ${item.whatsapp ? `<a href="https://wa.me/${sanitizePhoneNumber(item.whatsapp)}" target="_blank" class="social-btn bg-green-100 text-green-700">WA</a>` : ''}
+          ${item.facebook ? `<a href="${normalizeFacebookUrl(item.facebook)}" target="_blank" class="social-btn bg-blue-100 text-blue-700">FB</a>` : ''}
+          ${item.instagram ? `<a href="https://instagram.com/${sanitizeInstagramUsername(item.instagram)}" target="_blank" class="social-btn insta-grad">IG</a>` : ''}
+        </div>`;
+      listArea.appendChild(card);
+    });
   });
 }
+
+// panggil sekali waktu halaman load
 renderPublicList();
+
 
 // ======= SEARCH =======
 document.getElementById('searchBtn').addEventListener('click',handleSearch);
