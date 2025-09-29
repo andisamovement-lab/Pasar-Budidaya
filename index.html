@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Pasar Budidaya — Menghubungkan petani dan peternak ke khalayak ramai</title>
+<meta name="description" content="Pasar Budidaya — marketplace sederhana untuk menghubungkan petani & peternak dengan pembeli.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://www.gstatic.com https://cdn.tailwindcss.com https://cdn.emailjs.com https://iili.io https://res.cloudinary.com; script-src 'self' https://www.gstatic.com https://cdn.tailwindcss.com https://cdn.emailjs.com 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; img-src 'self' data: https://iili.io https://res.cloudinary.com https://lh3.googleusercontent.com https://drive.google.com; connect-src 'self' https://*.firebaseio.com https://andisamovement-lab.github.io https://www.googleapis.com https://cdn.emailjs.com; frame-ancestors 'none'; base-uri 'self';">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="permissions-policy" content="geolocation=(), camera=(), microphone=()">
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
+<style>
+.social-btn { display:inline-flex; align-items:center; gap:.5rem; padding:.35rem .5rem; border-radius:.45rem; }
+.social-btn svg { width:18px;height:18px; display:block; }
+.insta-grad {
+  background: radial-gradient(circle at 30% 30%, #fccc63 0%, transparent 15%),
+              linear-gradient(45deg,#f58529,#dd2a7b 30%,#8134af 60%,#515bd4 100%);
+  -webkit-background-clip: padding-box;
+  color: white;
+}
+</style>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+import { getDatabase, ref, set, push, get, child, remove, onValue } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+
+// === KONFIGURASI FIREBASE ===
+const firebaseConfig = {
+  apiKey: "AIzaSyB05CpkJHltmM7yh3J3NzvJ8HJYOy4d0s8",
+  authDomain: "pasar-budidaya.firebaseapp.com",
+  databaseURL: "https://pasar-budidaya-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "pasar-budidaya",
+  storageBucket: "pasar-budidaya.firebasestorage.app",
+  messagingSenderId: "1019549141667",
+  appId: "1:1019549141667:web:1e8493a34efe180dbe8d16"
+};
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+
+window.db = db; window.auth = auth;
+window.ref = ref; window.push = push; window.get = get; window.child = child; window.set = set; window.remove = remove; window.onValue = onValue;
+window.signInWithEmailAndPassword = signInWithEmailAndPassword; window.signOut = signOut;
+</script>
+<script src="https://cdn.emailjs.com/dist/email.min.js"></script>
+<script>
+(function(){ if(window.emailjs){ try{ emailjs.init("dMNd-zY7JPRieDdO6"); } catch(e){ console.warn('EmailJS init failed') } } })();
+</script>
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen flex flex-col">
+
+<header id="siteHeader" class="bg-white shadow-sm fixed top-0 left-0 w-full z-50">
+<div class="max-w-6xl mx-auto px-4 py-4 flex flex-col gap-2">
+  <div class="flex justify-start">
+    <button id="adminBtn" class="px-1 py-0.5 text-[10px] rounded border border-green-600 text-green-600 hover:bg-green-50">Admin</button>
+  </div>
+  <div class="flex flex-col items-center gap-2">
+    <img src="https://iili.io/K0Uz11e.md.png" alt="Logo Pasar Budidaya" class="w-20 h-20 object-contain" crossorigin="anonymous">
+    <div class="text-2xl font-bold" style="font-family: Montserrat">Pasar Budidaya</div>
+    <div class="text-xs text-gray-600 text-center">Menghubungkan petani dan peternak ke khalayak ramai</div>
+  </div>
+  <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+    <input id="searchInput" type="search" placeholder="Cari: judul, deskripsi, kecamatan..." class="flex-1 md:w-72 px-3 py-2 border rounded-lg text-sm" />
+    <button id="searchBtn" class="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700">Cari</button>
+  </div>
+</div>
+</header>
+
+<main id="mainContent" class="max-w-6xl mx-auto px-4 py-8 flex-1 w-full">
+<section class="mb-6">
+<h2 class="text-xl font-semibold mb-2">Daftar Petani & Peternak</h2>
+<p class="text-sm text-gray-600 mb-4">Lihat produk, kontak via WhatsApp / Facebook / Instagram.</p>
+</section>
+<section id="listArea" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></section>
+</main>
+
+<footer class="bg-gray-800 text-white py-4 ">
+<div class="max-w-6xl mx-auto px-4 text-center text-sm">&copy; 2025 Andisa Movement. Untuk info lebih lanjut hubungi 0831-6159-3659.</div>
+</footer>
+
+<script>
+// ======= HEADER & MARGIN =======
+function adjustMainMargin() {
+  const header = document.getElementById("siteHeader");
+  const main = document.getElementById("mainContent");
+  main.style.marginTop = header.offsetHeight + "px";
+  const footer = document.querySelector("footer");
+  main.style.marginBottom = footer.offsetHeight + "px";
+}
+adjustMainMargin();
+window.addEventListener("resize", adjustMainMargin);
+const header = document.getElementById("siteHeader");
+window.addEventListener("scroll", () => {
+  if (window.scrollY > 50) header.classList.add("bg-white/80", "backdrop-blur-sm", "shadow-lg");
+  else header.classList.remove("bg-white/80", "backdrop-blur-sm", "shadow-lg");
+});
+</script>
+
+<!-- ======= LOGIN & ADMIN MODAL ======= -->
+<div id="loginModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
+<div class="bg-white rounded-lg shadow-lg w-full max-w-md p-4">
+<div class="flex justify-between items-center mb-3">
+<h3 class="text-lg font-semibold">Admin Login</h3>
+<button id="closeLogin" class="text-gray-500 hover:text-gray-700">×</button>
+</div>
+<form id="loginForm" class="space-y-3">
+<div>
+<label class="text-xs text-gray-600">Email</label>
+<input id="loginEmail" type="email" class="w-full mt-1 px-3 py-2 border rounded" placeholder="email" required />
+</div>
+<div>
+<label class="text-xs text-gray-600">Password</label>
+<input id="loginPassword" type="password" class="w-full mt-1 px-3 py-2 border rounded" placeholder="password" required />
+</div>
+<button type="submit" class="w-full py-2 px-4 bg-green-600 text-white rounded hover:bg-green-700">Login</button>
+</form>
+</div>
+</div>
+
+<div id="adminModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
+<div class="bg-white rounded-lg shadow-lg w-full max-w-lg p-4 overflow-y-auto max-h-[90vh]">
+<div class="flex justify-between items-center mb-3">
+<h3 class="text-lg font-semibold">Admin Panel</h3>
+<button id="closeAdmin" class="text-gray-500 hover:text-gray-700">×</button>
+</div>
+<form id="listingForm" class="space-y-3">
+<div><label class="text-xs text-gray-600">Judul</label><input id="listingTitle" type="text" class="w-full mt-1 px-3 py-2 border rounded" required></div>
+<div><label class="text-xs text-gray-600">Deskripsi</label><textarea id="listingDesc" class="w-full mt-1 px-3 py-2 border rounded" required></textarea></div>
+<div><label class="text-xs text-gray-600">Kecamatan</label><input id="listingKec" type="text" class="w-full mt-1 px-3 py-2 border rounded" required></div>
+<div><label class="text-xs text-gray-600">Harga</label><input id="listingPrice" type="text" class="w-full mt-1 px-3 py-2 border rounded" required></div>
+<div><label class="text-xs text-gray-600">WhatsApp</label><input id="listingWA" type="text" class="w-full mt-1 px-3 py-2 border rounded"></div>
+<div><label class="text-xs text-gray-600">Facebook</label><input id="listingFB" type="text" class="w-full mt-1 px-3 py-2 border rounded"></div>
+<div><label class="text-xs text-gray-600">Instagram</label><input id="listingIG" type="text" class="w-full mt-1 px-3 py-2 border rounded"></div>
+<div><label class="text-xs text-gray-600">Gambar</label><input id="listingImage" type="file" class="w-full mt-1 px-3 py-2 border rounded"></div>
+<input type="hidden" id="editingKey" value="">
+<button type="submit" class="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700">Simpan Listing</button>
+</form>
+<hr class="my-4">
+<div id="adminListArea" class="space-y-2"></div>
+</div>
+</div>
+
+<script type="module">
+// ======= Helper Sanitasi =======
+function sanitizeHTML(str){ const div=document.createElement('div'); div.textContent=str; return div.innerHTML; }
+function normalizeFacebookUrl(url){ if(!url) return ''; if(!url.includes('facebook.com')) url='https://facebook.com/'+url.replace('@',''); return url; }
+function sanitizeInstagramUsername(user){ if(!user) return ''; return user.replace('@','').trim(); }
+function sanitizePhoneNumber(num){ return num.replace(/\D/g,''); }
+
+// ======= LOGIN =======
+const loginModal=document.getElementById('loginModal');
+document.getElementById('adminBtn').addEventListener('click',()=>loginModal.classList.remove('hidden'));
+document.getElementById('closeLogin').addEventListener('click',()=>loginModal.classList.add('hidden'));
+
+const loginForm=document.getElementById('loginForm');
+loginForm.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const email=document.getElementById('loginEmail').value;
+  const password=document.getElementById('loginPassword').value;
+  try{
+    const userCred = await signInWithEmailAndPassword(auth,email,password);
+    sessionStorage.setItem('pasarbudidaya.admin',userCred.user.uid);
+    loginModal.classList.add('hidden');
+    openAdminPanel();
+  }catch(err){ alert('Login gagal: '+err.message); }
+});
+
+// ======= ADMIN PANEL =======
+const adminModal=document.getElementById('adminModal');
+document.getElementById('closeAdmin').addEventListener('click',()=>adminModal.classList.add('hidden'));
+
+function openAdminPanel(){ adminModal.classList.remove('hidden'); loadAdminList(); }
+
+// ======= CLOUDINARY UPLOAD =======
+async function uploadToCloudinary(file){
+  const url='https://api.cloudinary.com/v1_1/doju1f65q/image/upload'; // ganti demo dengan cloud name
+  const preset='pasar_budidaya'; // ganti dengan unsigned preset milikmu
+  const formData=new FormData();
+  formData.append('file',file);
+  formData.append('upload_preset',preset);
+  const res=await fetch(url,{method:'POST',body:formData});
+  const data=await res.json();
+  return data.secure_url;
+}
+
+// ======= ADD / EDIT LISTING =======
+const listingForm=document.getElementById('listingForm');
+listingForm.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const title=sanitizeHTML(document.getElementById('listingTitle').value);
+  const description=sanitizeHTML(document.getElementById('listingDesc').value);
+  const kecamatan=sanitizeHTML(document.getElementById('listingKec').value);
+  const price=sanitizeHTML(document.getElementById('listingPrice').value);
+  const whatsapp=sanitizePhoneNumber(document.getElementById('listingWA').value);
+  const facebook=normalizeFacebookUrl(document.getElementById('listingFB').value);
+  const instagram=sanitizeInstagramUsername(document.getElementById('listingIG').value);
+  const imageFile=document.getElementById('listingImage').files[0];
+  let imageUrl=null;
+  if(imageFile) imageUrl=await uploadToCloudinary(imageFile);
+
+  const editingKey=document.getElementById('editingKey').value;
+  const data={title,description,kecamatan,price,whatsapp,facebook,instagram};
+  if(imageUrl) data.imageUrl=imageUrl;
+
+  if(editingKey){ await set(ref(db,'listings/'+editingKey),data); }
+  else{ await push(ref(db,'listings'),data); }
+
+  listingForm.reset(); document.getElementById('editingKey').value='';
+  loadAdminList(); renderPublicList();
+});
+
+// ======= LOAD ADMIN LIST =======
+async function loadAdminList(){
+  const area=document.getElementById('adminListArea'); area.innerHTML='';
+  const snap=await get(child(db,'listings')); if(!snap.exists()) return;
+  const data=snap.val();
+  Object.keys(data).forEach(key=>{
+    const item=data[key];
+    const div=document.createElement('div');
+    div.className='border rounded p-2 flex justify-between items-center';
+    div.innerHTML=`<span>${sanitizeHTML(item.title)}</span>
+      <div class="flex gap-1">
+      <button class="px-2 py-1 bg-yellow-400 text-white rounded text-xs editBtn">Edit</button>
+      <button class="px-2 py-1 bg-red-600 text-white rounded text-xs deleteBtn">Hapus</button>
+      </div>`;
+    div.querySelector('.editBtn').addEventListener('click',()=>{
+      document.getElementById('listingTitle').value=item.title;
+      document.getElementById('listingDesc').value=item.description;
+      document.getElementById('listingKec').value=item.kecamatan;
+      document.getElementById('listingPrice').value=item.price;
+      document.getElementById('listingWA').value=item.whatsapp||'';
+      document.getElementById('listingFB').value=item.facebook||'';
+      document.getElementById('listingIG').value=item.instagram||'';
+      document.getElementById('editingKey').value=key;
+    });
+    div.querySelector('.deleteBtn').addEventListener('click',async ()=>{
+      if(confirm('Hapus listing ini?')){ await remove(ref(db,'listings/'+key)); loadAdminList(); renderPublicList(); }
+    });
+    area.appendChild(div);
+  });
+}
+
+// ======= RENDER PUBLIC LIST =======
+async function renderPublicList(){
+  const listArea=document.getElementById('listArea'); listArea.innerHTML='';
+  const snap=await get(child(db,'listings')); if(!snap.exists()) return;
+  const data=snap.val();
+  Object.keys(data).forEach(key=>{
+    const item=data[key];
+    const title = sanitizeHTML(item.title||'');
+    const description = sanitizeHTML(item.description||'');
+    const kecamatan = sanitizeHTML(item.kecamatan||'');
+    const price = sanitizeHTML(item.price||'');
+    const whatsapp = (item.whatsapp||'').replace(/\D/g,'');
+    const facebook = normalizeFacebookUrl(item.facebook||'');
+    const instagram = sanitizeInstagramUsername(item.instagram||'');
+    const imageUrl=item.imageUrl||'https://iili.io/K0Uz11e.md.png';
+    const card=document.createElement('div');
+    card.className='border rounded-lg p-3 bg-white shadow';
+    card.innerHTML=`
+      <img src="${imageUrl}" alt="${title}" class="w-full h-40 object-cover rounded mb-2">
+      <h3 class="font-semibold">${title}</h3>
+      <p class="text-sm">${description}</p>
+      <p class="text-xs text-gray-500">Kecamatan: ${kecamatan} | Harga: ${price}</p>
+      <div class="flex gap-2 mt-2">
+        ${whatsapp?`<a href="https://wa.me/${whatsapp}" target="_blank" class="social-btn bg-green-100 text-green-700">WA</a>`:''}
+        ${facebook?`<a href="${facebook}" target="_blank" class="social-btn bg-blue-100 text-blue-700">FB</a>`:''}
+        ${instagram?`<a href="https://instagram.com/${instagram}" target="_blank" class="social-btn insta-grad">IG</a>`:''}
+      </div>`;
+    listArea.appendChild(card);
+  });
+}
+renderPublicList();
+
+// ======= SEARCH =======
+document.getElementById('searchBtn').addEventListener('click',handleSearch);
+document.getElementById('searchInput').addEventListener('keypress',e=>{if(e.key==='Enter') handleSearch();});
+async function handleSearch(){
+  const query=document.getElementById('searchInput').value.toLowerCase().trim();
+  const listArea=document.getElementById('listArea'); listArea.innerHTML='';
+  const snap=await get(child(db,'listings')); if(!snap.exists()) return;
+  const data=snap.val();
+  Object.keys(data).forEach(key=>{
+    const item=data[key];
+    const title=(item.title||'').toLowerCase();
+    const description=(item.description||'').toLowerCase();
+    const kecamatan=(item.kecamatan||'').toLowerCase();
+    if(title.includes(query)||description.includes(query)||kecamatan.includes(query)){
+      const card=document.createElement('div');
+      card.className='border rounded-lg p-3 bg-white shadow';
+      card.innerHTML=`
+      <img src="${item.imageUrl||'https://iili.io/K0Uz11e.md.png'}" alt="${item.title}" class="w-full h-40 object-cover rounded mb-2">
+      <h3 class="font-semibold">${sanitizeHTML(item.title)}</h3>
+      <p class="text-sm">${sanitizeHTML(item.description)}</p>
+      <p class="text-xs text-gray-500">Kecamatan: ${sanitizeHTML(item.kecamatan)} | Harga: ${sanitizeHTML(item.price)}</p>
+      <div class="flex gap-2 mt-2">
+        ${item.whatsapp?`<a href="https://wa.me/${sanitizePhoneNumber(item.whatsapp)}" target="_blank" class="social-btn bg-green-100 text-green-700">WA</a>`:''}
+        ${item.facebook?`<a href="${normalizeFacebookUrl(item.facebook)}" target="_blank" class="social-btn bg-blue-100 text-blue-700">FB</a>`:''}
+        ${item.instagram?`<a href="https://instagram.com/${sanitizeInstagramUsername(item.instagram)}" target="_blank" class="social-btn insta-grad">IG</a>`:''}
+      </div>`;
+      listArea.appendChild(card);
+    }
+  });
+}
+</script>
+</body>
+</html>
