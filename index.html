@@ -179,17 +179,21 @@ const adminModal=document.getElementById('adminModal');
 document.getElementById('closeAdmin').addEventListener('click',()=>adminModal.classList.add('hidden'));
 function openAdminPanel(){ adminModal.classList.remove('hidden'); loadAdminList(); }
 
-// ======= CLOUDINARY UPLOAD (SAFE UNSIGNED, STABLE) =======
+// ======= CLOUDINARY UPLOAD (SAFE UNSIGNED) =======
 async function uploadToCloudinary(file){
-  return new Promise((resolve,reject)=>{
-    const MAX_SIZE = 2 * 1024 * 1024; // 2MB limit
+  return new Promise((resolve, reject) => {
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB limit
+    if(!file){
+      resolve(null);
+      return;
+    }
     if(file.size > MAX_SIZE){
       reject("Ukuran file terlalu besar. Maks 5MB");
       return;
     }
 
     const url = "https://api.cloudinary.com/v1_1/doju1f65q/image/upload"; // unsigned
-    const preset = "pasar_budidaya"; // unsigned upload preset
+    const preset = "pasar_budidaya";
     const formData = new FormData();
     formData.append("file", file);
     formData.append("upload_preset", preset);
@@ -200,15 +204,10 @@ async function uploadToCloudinary(file){
     const progressBar = document.getElementById("progressBar");
     xhr.upload.onprogress = (e) => {
       if(e.lengthComputable){
-        const percent = Math.round((e.loaded / e.total) * 100);
-        progressBar.style.width = percent + "%";
-        progressBar.textContent = percent + "%";
+        const percent = Math.round((e.loaded / e.total) * 50); // upload 0~50%
+        progressBar.style.width = (10 + percent) + "%"; // mulai dari 10%
+        progressBar.textContent = (10 + percent) + "%";
       }
-    };
-
-    xhr.upload.onloadend = () => {
-      progressBar.style.width = "100%";
-      progressBar.textContent = "100%";
     };
 
     xhr.onload = () => {
@@ -225,20 +224,15 @@ async function uploadToCloudinary(file){
   });
 }
 
-// ======= ADD / EDIT LISTING =======
-const listingForm=document.getElementById('listingForm');
+// ======= SUBMIT / ADD LISTING =======
 listingForm.addEventListener('submit', async e => {
   e.preventDefault();
+
   const progressContainer = document.getElementById('progressContainer');
   const progressBar = document.getElementById('progressBar');
-  
-  function updateProgress(val){
-    progressBar.style.width = val + "%";
-    progressBar.textContent = val + "%";
-  }
-
   progressContainer.classList.remove('hidden');
-  updateProgress(0);
+  progressBar.style.width = "0%";
+  progressBar.textContent = "0%";
 
   const title = sanitizeHTML(document.getElementById('listingTitle').value);
   const description = sanitizeHTML(document.getElementById('listingDesc').value);
@@ -248,44 +242,21 @@ listingForm.addEventListener('submit', async e => {
   const facebook = normalizeFacebookUrl(document.getElementById('listingFB').value);
   const instagram = sanitizeInstagramUsername(document.getElementById('listingIG').value);
   const imageFile = document.getElementById('listingImage').files[0];
-  let imageUrl = null;
+  const editingKey = document.getElementById('editingKey').value;
 
-  try {
-    // Step 1: Upload image jika ada
+  try{
+    // 1️⃣ Upload image
+    let imageUrl = null;
     if(imageFile){
-      updateProgress(10);
-      imageUrl = await new Promise((resolve, reject) => {
-        const url = "https://api.cloudinary.com/v1_1/doju1f65q/image/upload"; 
-        const preset = "pasar_budidaya"; 
-        const formData = new FormData();
-        formData.append("file", imageFile);
-        formData.append("upload_preset", preset);
-
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", url, true);
-
-        xhr.upload.onprogress = (e) => {
-          if(e.lengthComputable){
-            const percent = Math.round((e.loaded / e.total) * 50); // 0~50% untuk upload
-            updateProgress(10 + percent); // mulai dari 10%
-          }
-        };
-
-        xhr.onload = () => {
-          if(xhr.status >= 200 && xhr.status < 300){
-            try{ resolve(JSON.parse(xhr.responseText).secure_url); } 
-            catch(err){ reject("Parse response error"); }
-          } else reject("Upload gagal: "+xhr.statusText);
-        };
-
-        xhr.onerror = () => reject("Upload error");
-        xhr.send(formData);
-      });
+      progressBar.style.width = "10%";
+      progressBar.textContent = "10%";
+      imageUrl = await uploadToCloudinary(imageFile);
     }
 
-    // Step 2: Simpan data ke Firebase
-    updateProgress(60); // sebelum save
-    const editingKey = document.getElementById('editingKey').value;
+    // 2️⃣ Simpan data ke Firebase
+    progressBar.style.width = "60%";
+    progressBar.textContent = "60%";
+
     const data = { title, description, kecamatan, price, whatsapp, facebook, instagram };
     if(imageUrl) data.imageUrl = imageUrl;
 
@@ -295,18 +266,20 @@ listingForm.addEventListener('submit', async e => {
       await push(ref(db,'listings'),data);
     }
 
-    // Step 3: Progress smooth 60 → 100% dalam 300ms
+    // 3️⃣ Progress smooth 60 → 100%
     let prog = 60;
     const interval = setInterval(()=>{
-      prog += 4; // naik 4% per frame
+      prog += 2; // naik perlahan
       if(prog >= 100){ prog = 100; clearInterval(interval); }
-      updateProgress(prog);
-    }, 10);
+      progressBar.style.width = prog + "%";
+      progressBar.textContent = prog + "%";
+    }, 20);
 
     setTimeout(()=>{
       progressContainer.classList.add('hidden');
-      updateProgress(0);
-    }, 400); // sembunyikan progress setelah animasi selesai
+      progressBar.style.width = "0%";
+      progressBar.textContent = "0%";
+    }, 1200);
 
     alert("Listing berhasil disimpan!");
     listingForm.reset();
@@ -318,7 +291,8 @@ listingForm.addEventListener('submit', async e => {
     console.error("Error simpan listing:", err);
     alert("Gagal simpan listing: " + err);
     progressContainer.classList.add('hidden');
-    updateProgress(0);
+    progressBar.style.width = "0%";
+    progressBar.textContent = "0%";
   }
 });
 
