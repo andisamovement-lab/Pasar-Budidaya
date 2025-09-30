@@ -179,139 +179,90 @@ const adminModal=document.getElementById('adminModal');
 document.getElementById('closeAdmin').addEventListener('click',()=>adminModal.classList.add('hidden'));
 function openAdminPanel(){ adminModal.classList.remove('hidden'); loadAdminList(); }
 
-// ======= CLOUDINARY UPLOAD (SAFE UNSIGNED) =======
-async function uploadToCloudinary(file){
-  return new Promise((resolve, reject) => {
-    const MAX_SIZE = 5 * 1024 * 1024; // 5MB limit
-    if(!file){
-      resolve(null);
-      return;
-    }
-    if(file.size > MAX_SIZE){
-      reject("Ukuran file terlalu besar. Maks 5MB");
-      return;
-    }
-
-    const url = "https://api.cloudinary.com/v1_1/doju1f65q/image/upload"; // unsigned
+// ======= CLOUDINARY UPLOAD =======
+async function uploadToCloudinary(file, progressCallback){
+  return new Promise((resolve,reject)=>{
+    const MAX_SIZE = 2*1024*1024;
+    if(file.size > MAX_SIZE){ reject("Ukuran file terlalu besar. Maks 2MB"); return; }
+    const url = "https://api.cloudinary.com/v1_1/doju1f65q/image/upload";
     const preset = "pasar_budidaya";
     const formData = new FormData();
-    formData.append("file", file);
-    formData.append("upload_preset", preset);
-
+    formData.append("file",file);
+    formData.append("upload_preset",preset);
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url, true);
-
-    const progressBar = document.getElementById("progressBar");
     xhr.upload.onprogress = (e) => {
-      if(e.lengthComputable){
-        const percent = Math.round((e.loaded / e.total) * 50); // upload 0~50%
-        progressBar.style.width = (10 + percent) + "%"; // mulai dari 10%
-        progressBar.textContent = (10 + percent) + "%";
+      if(e.lengthComputable && progressCallback){
+        const percent = Math.round((e.loaded / e.total)*50);
+        progressCallback(percent);
       }
     };
-
-    xhr.onload = () => {
-      if(xhr.status >= 200 && xhr.status < 300){
-        try{
-          const res = JSON.parse(xhr.responseText);
-          resolve(res.secure_url);
-        } catch(err){ reject("Parse response error"); }
+    xhr.onload = ()=> {
+      if(xhr.status>=200 && xhr.status<300){
+        try{ resolve(JSON.parse(xhr.responseText).secure_url); } catch(err){ reject("Parse response error"); }
       } else reject("Upload gagal: "+xhr.statusText);
     };
-
-    xhr.onerror = () => reject("Upload error");
+    xhr.onerror=()=>reject("Upload error");
     xhr.send(formData);
   });
 }
 
-// ======= SUBMIT / ADD LISTING =======
+// ======= ADD / EDIT LISTING =======
+const listingForm=document.getElementById('listingForm');
 listingForm.addEventListener('submit', async e => {
   e.preventDefault();
+  const progressContainer=document.getElementById('progressContainer');
+  const progressBar=document.getElementById('progressBar');
+  function updateProgress(val){ progressBar.style.width=val+"%"; progressBar.textContent=val+"%"; }
+  progressContainer.classList.remove('hidden'); updateProgress(0);
 
-  const progressContainer = document.getElementById('progressContainer');
-  const progressBar = document.getElementById('progressBar');
-  progressContainer.classList.remove('hidden');
-  progressBar.style.width = "0%";
-  progressBar.textContent = "0%";
-
-  const title = sanitizeHTML(document.getElementById('listingTitle').value);
-  const description = sanitizeHTML(document.getElementById('listingDesc').value);
-  const kecamatan = sanitizeHTML(document.getElementById('listingKec').value);
-  const price = sanitizeHTML(document.getElementById('listingPrice').value);
-  const whatsapp = sanitizePhoneNumber(document.getElementById('listingWA').value);
-  const facebook = normalizeFacebookUrl(document.getElementById('listingFB').value);
-  const instagram = sanitizeInstagramUsername(document.getElementById('listingIG').value);
-  const imageFile = document.getElementById('listingImage').files[0];
-  const editingKey = document.getElementById('editingKey').value;
+  const title=sanitizeHTML(document.getElementById('listingTitle').value);
+  const description=sanitizeHTML(document.getElementById('listingDesc').value);
+  const kecamatan=sanitizeHTML(document.getElementById('listingKec').value);
+  const price=sanitizeHTML(document.getElementById('listingPrice').value);
+  const whatsapp=sanitizePhoneNumber(document.getElementById('listingWA').value);
+  const facebook=normalizeFacebookUrl(document.getElementById('listingFB').value);
+  const instagram=sanitizeInstagramUsername(document.getElementById('listingIG').value);
+  const imageFile=document.getElementById('listingImage').files[0];
+  let imageUrl=null;
 
   try{
-    // 1️⃣ Upload image
-    let imageUrl = null;
     if(imageFile){
-      progressBar.style.width = "10%";
-      progressBar.textContent = "10%";
-      imageUrl = await uploadToCloudinary(imageFile);
+      imageUrl = await uploadToCloudinary(imageFile,(percent)=>{ updateProgress(10+percent); });
     }
+    updateProgress(60);
+    const editingKey=document.getElementById('editingKey').value;
+    const data={title,description,kecamatan,price,whatsapp,facebook,instagram};
+    if(imageUrl) data.imageUrl=imageUrl;
+    if(editingKey) await set(ref(db,'listings/'+editingKey),data);
+    else await push(ref(db,'listings'),data);
 
-    // 2️⃣ Simpan data ke Firebase
-    progressBar.style.width = "60%";
-    progressBar.textContent = "60%";
-
-    const data = { title, description, kecamatan, price, whatsapp, facebook, instagram };
-    if(imageUrl) data.imageUrl = imageUrl;
-
-    if(editingKey){
-      await set(ref(db,'listings/'+editingKey),data);
-    } else {
-      await push(ref(db,'listings'),data);
-    }
-
-    // 3️⃣ Progress smooth 60 → 100%
-    let prog = 60;
-    const interval = setInterval(()=>{
-      prog += 2; // naik perlahan
-      if(prog >= 100){ prog = 100; clearInterval(interval); }
-      progressBar.style.width = prog + "%";
-      progressBar.textContent = prog + "%";
-    }, 20);
-
-    setTimeout(()=>{
-      progressContainer.classList.add('hidden');
-      progressBar.style.width = "0%";
-      progressBar.textContent = "0%";
-    }, 1200);
+    let prog=60;
+    const interval=setInterval(()=>{ prog+=4; if(prog>=100){ prog=100; clearInterval(interval); } updateProgress(prog); },10);
+    setTimeout(()=>{ progressContainer.classList.add('hidden'); updateProgress(0); },500);
 
     alert("Listing berhasil disimpan!");
     listingForm.reset();
     document.getElementById('editingKey').value='';
-    loadAdminList();
-    renderPublicList();
-
-  } catch(err){
-    console.error("Error simpan listing:", err);
-    alert("Gagal simpan listing: " + err);
-    progressContainer.classList.add('hidden');
-    progressBar.style.width = "0%";
-    progressBar.textContent = "0%";
-  }
+    loadAdminList(); renderPublicList();
+  } catch(err){ console.error(err); alert("Gagal simpan listing: "+err); progressContainer.classList.add('hidden'); updateProgress(0); }
 });
-
 
 // ======= LOAD ADMIN LIST =======
 async function loadAdminList(){
-  const area = document.getElementById('adminListArea'); area.innerHTML='';
-  const snap = await get(ref(db, 'listings')); if(!snap.exists()) return;
-  const data = snap.val();
-  Object.keys(data).forEach(key => {
-    const item = data[key];
-    const div = document.createElement('div');
-    div.className = 'border rounded p-2 flex justify-between items-center';
-    div.innerHTML = `<span>${sanitizeHTML(item.title)}</span>
+  const area=document.getElementById('adminListArea'); area.innerHTML='';
+  const snap=await get(ref(db,'listings')); if(!snap.exists()) return;
+  const data=snap.val();
+  Object.keys(data).forEach(key=>{
+    const item=data[key];
+    const div=document.createElement('div');
+    div.className='border rounded p-2 flex justify-between items-center';
+    div.innerHTML=`<span>${sanitizeHTML(item.title)}</span>
       <div class="flex gap-1">
         <button class="px-2 py-1 bg-yellow-400 text-white rounded text-xs editBtn">Edit</button>
         <button class="px-2 py-1 bg-red-600 text-white rounded text-xs deleteBtn">Hapus</button>
       </div>`;
-    div.querySelector('.editBtn').addEventListener('click', ()=>{
+    div.querySelector('.editBtn').addEventListener('click',()=>{
       document.getElementById('listingTitle').value=item.title;
       document.getElementById('listingDesc').value=item.description;
       document.getElementById('listingKec').value=item.kecamatan;
@@ -320,39 +271,34 @@ async function loadAdminList(){
       document.getElementById('listingFB').value=item.facebook;
       document.getElementById('listingIG').value=item.instagram;
       document.getElementById('editingKey').value=key;
-      adminModal.scrollTo({top:0,behavior:'smooth'});
+      adminModal.classList.remove('hidden');
     });
-    div.querySelector('.deleteBtn').addEventListener('click', async()=>{
-      if(confirm("Hapus listing ini?")){
-        await remove(ref(db,'listings/'+key));
-        loadAdminList(); renderPublicList();
-      }
+    div.querySelector('.deleteBtn').addEventListener('click', async ()=>{
+      if(confirm('Hapus listing ini?')){ await remove(ref(db,'listings/'+key)); loadAdminList(); renderPublicList(); }
     });
     area.appendChild(div);
   });
 }
 
-// ======= PUBLIC LISTING =======
+// ======= RENDER PUBLIC LIST =======
 async function renderPublicList(){
-  const area = document.getElementById('listArea'); area.innerHTML='';
-  const snap = await get(ref(db,'listings')); if(!snap.exists()) return;
-  const data = snap.val();
+  const area=document.getElementById('listArea'); area.innerHTML='';
+  const snap=await get(ref(db,'listings')); if(!snap.exists()) return;
+  const data=snap.val();
   Object.keys(data).forEach(key=>{
-    const item = data[key];
-    const div = document.createElement('div');
-    div.className = 'border rounded p-3 bg-white shadow-sm';
-    div.innerHTML = `
-      ${item.imageUrl ? `<img src="${item.imageUrl}" class="w-full h-40 object-cover rounded mb-2">` : ''}
-      <h3 class="font-semibold">${sanitizeHTML(item.title)}</h3>
-      <p class="text-xs text-gray-600 mb-1">${sanitizeHTML(item.description)}</p>
-      <p class="text-xs text-gray-500 mb-1">Kecamatan: ${sanitizeHTML(item.kecamatan)}</p>
-      <p class="text-sm font-bold mb-1">Rp ${sanitizeHTML(item.price)}</p>
-      <div class="flex gap-2 text-xs">
-        ${item.whatsapp ? `<a href="https://wa.me/${item.whatsapp}" target="_blank" class="px-2 py-1 bg-green-500 text-white rounded">WhatsApp</a>` : ''}
-        ${item.facebook ? `<a href="${item.facebook}" target="_blank" class="px-2 py-1 bg-blue-600 text-white rounded">Facebook</a>` : ''}
-        ${item.instagram ? `<a href="https://instagram.com/${item.instagram}" target="_blank" class="px-2 py-1 bg-pink-500 text-white rounded">Instagram</a>` : ''}
-      </div>
-    `;
+    const item=data[key];
+    const div=document.createElement('div');
+    div.className='border rounded p-3 bg-white shadow hover:shadow-md transition';
+    div.innerHTML=`<h3 class="font-semibold mb-1">${sanitizeHTML(item.title)}</h3>
+      <p class="text-sm mb-2">${sanitizeHTML(item.description)}</p>
+      <p class="text-xs text-gray-500 mb-2">Kecamatan: ${sanitizeHTML(item.kecamatan)}</p>
+      <p class="text-xs text-gray-500 mb-2">Harga: ${sanitizeHTML(item.price)}</p>
+      ${item.imageUrl?`<img src="${item.imageUrl}" class="w-full h-40 object-cover mb-2 rounded">`:''}
+      <div class="flex gap-2 flex-wrap">
+        ${item.whatsapp?`<a href="https://wa.me/${item.whatsapp}" target="_blank" class="social-btn bg-green-500 text-white">WA</a>`:''}
+        ${item.facebook?`<a href="${item.facebook}" target="_blank" class="social-btn bg-blue-600 text-white">FB</a>`:''}
+        ${item.instagram?`<a href="https://instagram.com/${item.instagram}" target="_blank" class="social-btn insta-grad">IG</a>`:''}
+      </div>`;
     area.appendChild(div);
   });
 }
