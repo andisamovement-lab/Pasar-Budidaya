@@ -179,9 +179,15 @@ const adminModal=document.getElementById('adminModal');
 document.getElementById('closeAdmin').addEventListener('click',()=>adminModal.classList.add('hidden'));
 function openAdminPanel(){ adminModal.classList.remove('hidden'); loadAdminList(); }
 
-// ======= CLOUDINARY UPLOAD (SAFE UNSIGNED) =======
+// ======= CLOUDINARY UPLOAD (SAFE UNSIGNED, STABLE) =======
 async function uploadToCloudinary(file){
   return new Promise((resolve,reject)=>{
+    const MAX_SIZE = 2 * 1024 * 1024; // 2MB limit
+    if(file.size > MAX_SIZE){
+      reject("Ukuran file terlalu besar. Maks 5MB");
+      return;
+    }
+
     const url = "https://api.cloudinary.com/v1_1/doju1f65q/image/upload"; // unsigned
     const preset = "pasar_budidaya"; // unsigned upload preset
     const formData = new FormData();
@@ -191,14 +197,18 @@ async function uploadToCloudinary(file){
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url, true);
 
-    // progress update
+    const progressBar = document.getElementById("progressBar");
     xhr.upload.onprogress = (e) => {
       if(e.lengthComputable){
         const percent = Math.round((e.loaded / e.total) * 100);
-        const progressBar = document.getElementById("progressBar");
-        progressBar.style.width = percent+"%";
-        progressBar.textContent = percent+"%";
+        progressBar.style.width = percent + "%";
+        progressBar.textContent = percent + "%";
       }
+    };
+
+    xhr.upload.onloadend = () => {
+      progressBar.style.width = "100%";
+      progressBar.textContent = "100%";
     };
 
     xhr.onload = () => {
@@ -242,7 +252,7 @@ listingForm.addEventListener('submit',async e=>{
     if(imageFile){
       updateProgress(30);
       imageUrl=await uploadToCloudinary(imageFile);
-      updateProgress(80);
+      updateProgress(90);
     }
 
     const editingKey=document.getElementById('editingKey').value;
@@ -288,10 +298,10 @@ async function loadAdminList(){
       document.getElementById('listingFB').value=item.facebook;
       document.getElementById('listingIG').value=item.instagram;
       document.getElementById('editingKey').value=key;
-      adminModal.scrollTop = 0;
+      adminModal.scrollTo({top:0,behavior:'smooth'});
     });
-    div.querySelector('.deleteBtn').addEventListener('click', async ()=>{
-      if(confirm("Yakin ingin hapus?")){
+    div.querySelector('.deleteBtn').addEventListener('click', async()=>{
+      if(confirm("Hapus listing ini?")){
         await remove(ref(db,'listings/'+key));
         loadAdminList(); renderPublicList();
       }
@@ -300,57 +310,32 @@ async function loadAdminList(){
   });
 }
 
-// ======= RENDER PUBLIC LIST =======
+// ======= PUBLIC LISTING =======
 async function renderPublicList(){
-  const area = document.getElementById('listArea'); area.innerHTML='';
-  const snap = await get(ref(db,'listings')); if(!snap.exists()) return;
-  const data = snap.val();
-  Object.keys(data).forEach(key => {
-    const item = data[key];
-    const div = document.createElement('div');
-    div.className = 'border rounded p-3 bg-white shadow';
-    div.innerHTML = `
-      ${item.imageUrl? `<img src="${item.imageUrl}" class="w-full h-48 object-cover mb-2 rounded">` : ''}
-      <h3 class="font-semibold">${sanitizeHTML(item.title)}</h3>
-      <p class="text-xs text-gray-600">${sanitizeHTML(item.description)}</p>
-      <p class="text-sm font-medium mt-1">Kecamatan: ${sanitizeHTML(item.kecamatan)}</p>
-      <p class="text-sm font-medium mt-1">Harga: ${sanitizeHTML(item.price)}</p>
-      <div class="flex gap-2 mt-2">
-        ${item.whatsapp? `<a href="https://wa.me/${item.whatsapp}" target="_blank" class="px-2 py-1 bg-green-600 text-white text-xs rounded">WA</a>` : ''}
-        ${item.facebook? `<a href="${item.facebook}" target="_blank" class="px-2 py-1 bg-blue-600 text-white text-xs rounded">FB</a>` : ''}
-        ${item.instagram? `<a href="https://instagram.com/${item.instagram}" target="_blank" class="px-2 py-1 bg-pink-500 text-white text-xs rounded">IG</a>` : ''}
-      </div>`;
-    area.appendChild(div);
-  });
-}
-renderPublicList();
-
-// ======= SEARCH =======
-document.getElementById('searchBtn').addEventListener('click', async ()=>{
-  const term = document.getElementById('searchInput').value.toLowerCase();
   const area = document.getElementById('listArea'); area.innerHTML='';
   const snap = await get(ref(db,'listings')); if(!snap.exists()) return;
   const data = snap.val();
   Object.keys(data).forEach(key=>{
     const item = data[key];
-    if(item.title.toLowerCase().includes(term) || item.description.toLowerCase().includes(term) || item.kecamatan.toLowerCase().includes(term)){
-      const div = document.createElement('div');
-      div.className = 'border rounded p-3 bg-white shadow';
-      div.innerHTML = `
-        ${item.imageUrl? `<img src="${item.imageUrl}" class="w-full h-48 object-cover mb-2 rounded">` : ''}
-        <h3 class="font-semibold">${sanitizeHTML(item.title)}</h3>
-        <p class="text-xs text-gray-600">${sanitizeHTML(item.description)}</p>
-        <p class="text-sm font-medium mt-1">Kecamatan: ${sanitizeHTML(item.kecamatan)}</p>
-        <p class="text-sm font-medium mt-1">Harga: ${sanitizeHTML(item.price)}</p>
-        <div class="flex gap-2 mt-2">
-          ${item.whatsapp? `<a href="https://wa.me/${item.whatsapp}" target="_blank" class="px-2 py-1 bg-green-600 text-white text-xs rounded">WA</a>` : ''}
-          ${item.facebook? `<a href="${item.facebook}" target="_blank" class="px-2 py-1 bg-blue-600 text-white text-xs rounded">FB</a>` : ''}
-          ${item.instagram? `<a href="https://instagram.com/${item.instagram}" target="_blank" class="px-2 py-1 bg-pink-500 text-white text-xs rounded">IG</a>` : ''}
-        </div>`;
-      area.appendChild(div);
-    }
+    const div = document.createElement('div');
+    div.className = 'border rounded p-3 bg-white shadow-sm';
+    div.innerHTML = `
+      ${item.imageUrl ? `<img src="${item.imageUrl}" class="w-full h-40 object-cover rounded mb-2">` : ''}
+      <h3 class="font-semibold">${sanitizeHTML(item.title)}</h3>
+      <p class="text-xs text-gray-600 mb-1">${sanitizeHTML(item.description)}</p>
+      <p class="text-xs text-gray-500 mb-1">Kecamatan: ${sanitizeHTML(item.kecamatan)}</p>
+      <p class="text-sm font-bold mb-1">Rp ${sanitizeHTML(item.price)}</p>
+      <div class="flex gap-2 text-xs">
+        ${item.whatsapp ? `<a href="https://wa.me/${item.whatsapp}" target="_blank" class="px-2 py-1 bg-green-500 text-white rounded">WhatsApp</a>` : ''}
+        ${item.facebook ? `<a href="${item.facebook}" target="_blank" class="px-2 py-1 bg-blue-600 text-white rounded">Facebook</a>` : ''}
+        ${item.instagram ? `<a href="https://instagram.com/${item.instagram}" target="_blank" class="px-2 py-1 bg-pink-500 text-white rounded">Instagram</a>` : ''}
+      </div>
+    `;
+    area.appendChild(div);
   });
-});
+}
+renderPublicList();
 </script>
+
 </body>
 </html>
