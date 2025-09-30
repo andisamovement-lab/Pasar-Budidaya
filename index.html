@@ -138,10 +138,12 @@ window.addEventListener("scroll", () => {
 <button type="submit" class="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700">Simpan Listing</button>
 
 <div id="progressContainer" class="hidden w-full mt-3">
+  <div id="progressText" class="text-xs text-gray-700 mb-1 text-center">Memulai...</div>
   <div class="w-full bg-gray-200 rounded-full h-2.5">
     <div id="progressBar" class="bg-green-500 h-2.5 rounded-full text-[10px] text-white text-center" style="width:0%">0%</div>
   </div>
 </div>
+
 
 </form>
 <hr class="my-4">
@@ -155,29 +157,6 @@ function sanitizeHTML(str){ const div=document.createElement('div'); div.textCon
 function normalizeFacebookUrl(url){ if(!url) return ''; if(!url.includes('facebook.com')) url='https://facebook.com/'+url.replace('@',''); return url; }
 function sanitizeInstagramUsername(user){ if(!user) return ''; return user.replace('@','').trim(); }
 function sanitizePhoneNumber(num){ if(!num) return ''; return num.replace(/\D/g,''); }
-
-// ======= LOGIN =======
-const loginModal=document.getElementById('loginModal');
-document.getElementById('adminBtn').addEventListener('click',()=>loginModal.classList.remove('hidden'));
-document.getElementById('closeLogin').addEventListener('click',()=>loginModal.classList.add('hidden'));
-
-const loginForm=document.getElementById('loginForm');
-loginForm.addEventListener('submit',async e=>{
-  e.preventDefault();
-  const email=document.getElementById('loginEmail').value;
-  const password=document.getElementById('loginPassword').value;
-  try{
-    const userCred = await signInWithEmailAndPassword(auth,email,password);
-    sessionStorage.setItem('pasarbudidaya.admin',userCred.user.uid);
-    loginModal.classList.add('hidden');
-    openAdminPanel();
-  }catch(err){ alert('Login gagal: '+err.message); }
-});
-
-// ======= ADMIN PANEL =======
-const adminModal=document.getElementById('adminModal');
-document.getElementById('closeAdmin').addEventListener('click',()=>adminModal.classList.add('hidden'));
-function openAdminPanel(){ adminModal.classList.remove('hidden'); loadAdminList(); }
 
 // ======= CLOUDINARY UPLOAD =======
 async function uploadToCloudinary(file, progressCallback){
@@ -193,7 +172,8 @@ async function uploadToCloudinary(file, progressCallback){
     xhr.open("POST", url, true);
     xhr.upload.onprogress = (e) => {
       if(e.lengthComputable && progressCallback){
-        const percent = Math.round((e.loaded / e.total) * 50); // 0-50%
+        // 0–70% untuk upload
+        const percent = Math.round((e.loaded / e.total) * 70);
         progressCallback(percent);
       }
     };
@@ -215,10 +195,15 @@ listingForm.addEventListener('submit', async e => {
   const progressContainer = document.getElementById('progressContainer');
   const progressBar = document.getElementById('progressBar');
   
-  function updateProgress(val) {
-    progressBar.style.width = val + "%";
-    progressBar.textContent = val + "%";
-  }
+function updateProgress(val, stage){
+  const progressBar = document.getElementById('progressBar');
+  const progressText = document.getElementById('progressText');
+  progressBar.style.width = val + "%";
+  progressBar.textContent = val + "%";
+
+  if(stage) progressText.textContent = stage; // update keterangan sesuai tahap
+}
+
   
   progressContainer.classList.remove('hidden');
   updateProgress(0);
@@ -234,42 +219,39 @@ listingForm.addEventListener('submit', async e => {
   let imageUrl = null;
 
   try {
-    // Upload gambar jika ada
-    if (imageFile) {
-      imageUrl = await uploadToCloudinary(imageFile, (percent) => {
-        // Upload progress 0–80%
-        updateProgress(Math.round(percent * 0.8));
-      });
-    }
+    console.log("Mulai upload gambar...");
+// Upload gambar
+if (imageFile) {
+  imageUrl = await uploadToCloudinary(imageFile, (percent) => {
+    updateProgress(percent, "Mengunggah gambar...");
+  });
+}
 
-    // Setelah upload selesai
-    updateProgress(80);
+// Setelah upload selesai
+updateProgress(75, "Menyimpan ke database...");
 
-    const editingKey = document.getElementById('editingKey').value;
-    const data = { title, description, kecamatan, price };
-    if (whatsapp) data.whatsapp = whatsapp;
-    if (facebook) data.facebook = facebook;
-    if (instagram) data.instagram = instagram;
-    if (imageUrl) data.imageUrl = imageUrl;
+if (editingKey) await set(ref(db, 'listings/' + editingKey), data);
+else await push(ref(db, 'listings'), data);
 
-    // Simpan ke Firebase Realtime Database
-    if (editingKey) await set(ref(db, 'listings/' + editingKey), data);
-    else await push(ref(db, 'listings'), data);
+// Setelah DB selesai
+updateProgress(90, "Memperbarui tampilan list...");
 
-    // Update progres ke 100%
-    updateProgress(100);
+// Render list
+await renderPublicList();
+await loadAdminList();
 
-    setTimeout(() => {
-      progressContainer.classList.add('hidden');
-      updateProgress(0);
-    }, 500);
+// Selesai
+updateProgress(100, "Selesai!");
+setTimeout(()=>{
+  progressContainer.classList.add('hidden');
+  updateProgress(0, "Memulai...");
+},500);
+
 
     alert("Listing berhasil disimpan!");
     listingForm.reset();
     document.getElementById('editingKey').value = '';
-    loadAdminList();
-    renderPublicList();
-
+    
   } catch (err) {
     console.error(err);
     alert("Gagal simpan listing: " + err);
@@ -332,7 +314,7 @@ async function renderPublicList(){
     area.appendChild(div);
   });
 }
-renderPublicList();
 </script>
+
 </body>
 </html>
