@@ -193,7 +193,7 @@ async function uploadToCloudinary(file, progressCallback){
     xhr.open("POST", url, true);
     xhr.upload.onprogress = (e) => {
       if(e.lengthComputable && progressCallback){
-        const percent = Math.round((e.loaded / e.total)*50);
+        const percent = Math.round((e.loaded / e.total) * 50); // 0-50%
         progressCallback(percent);
       }
     };
@@ -211,41 +211,71 @@ async function uploadToCloudinary(file, progressCallback){
 const listingForm=document.getElementById('listingForm');
 listingForm.addEventListener('submit', async e => {
   e.preventDefault();
-  const progressContainer=document.getElementById('progressContainer');
-  const progressBar=document.getElementById('progressBar');
-  function updateProgress(val){ progressBar.style.width=val+"%"; progressBar.textContent=val+"%"; }
-  progressContainer.classList.remove('hidden'); updateProgress(0);
+  
+  const progressContainer = document.getElementById('progressContainer');
+  const progressBar = document.getElementById('progressBar');
+  
+  function updateProgress(val) {
+    progressBar.style.width = val + "%";
+    progressBar.textContent = val + "%";
+  }
+  
+  progressContainer.classList.remove('hidden');
+  updateProgress(0);
 
-  const title=sanitizeHTML(document.getElementById('listingTitle').value);
-  const description=sanitizeHTML(document.getElementById('listingDesc').value);
-  const kecamatan=sanitizeHTML(document.getElementById('listingKec').value);
-  const price=sanitizeHTML(document.getElementById('listingPrice').value);
-  const whatsapp=sanitizePhoneNumber(document.getElementById('listingWA').value);
-  const facebook=normalizeFacebookUrl(document.getElementById('listingFB').value);
-  const instagram=sanitizeInstagramUsername(document.getElementById('listingIG').value);
-  const imageFile=document.getElementById('listingImage').files[0];
-  let imageUrl=null;
+  const title = sanitizeHTML(document.getElementById('listingTitle').value);
+  const description = sanitizeHTML(document.getElementById('listingDesc').value);
+  const kecamatan = sanitizeHTML(document.getElementById('listingKec').value);
+  const price = sanitizeHTML(document.getElementById('listingPrice').value);
+  const whatsapp = sanitizePhoneNumber(document.getElementById('listingWA').value);
+  const facebook = normalizeFacebookUrl(document.getElementById('listingFB').value);
+  const instagram = sanitizeInstagramUsername(document.getElementById('listingIG').value);
+  const imageFile = document.getElementById('listingImage').files[0];
+  let imageUrl = null;
 
-  try{
-    if(imageFile){
-      imageUrl = await uploadToCloudinary(imageFile,(percent)=>{ updateProgress(10+percent); });
+  try {
+    // Upload gambar jika ada
+    if (imageFile) {
+      imageUrl = await uploadToCloudinary(imageFile, (percent) => {
+        // Upload progress 0–80%
+        updateProgress(Math.round(percent * 0.8));
+      });
     }
-    updateProgress(60);
-    const editingKey=document.getElementById('editingKey').value;
-    const data={title,description,kecamatan,price,whatsapp,facebook,instagram};
-    if(imageUrl) data.imageUrl=imageUrl;
-    if(editingKey) await set(ref(db,'listings/'+editingKey),data);
-    else await push(ref(db,'listings'),data);
 
-    let prog=60;
-    const interval=setInterval(()=>{ prog+=4; if(prog>=100){ prog=100; clearInterval(interval); } updateProgress(prog); },10);
-    setTimeout(()=>{ progressContainer.classList.add('hidden'); updateProgress(0); },500);
+    // Setelah upload selesai
+    updateProgress(80);
+
+    const editingKey = document.getElementById('editingKey').value;
+    const data = { title, description, kecamatan, price };
+    if (whatsapp) data.whatsapp = whatsapp;
+    if (facebook) data.facebook = facebook;
+    if (instagram) data.instagram = instagram;
+    if (imageUrl) data.imageUrl = imageUrl;
+
+    // Simpan ke Firebase Realtime Database
+    if (editingKey) await set(ref(db, 'listings/' + editingKey), data);
+    else await push(ref(db, 'listings'), data);
+
+    // Update progres ke 100%
+    updateProgress(100);
+
+    setTimeout(() => {
+      progressContainer.classList.add('hidden');
+      updateProgress(0);
+    }, 500);
 
     alert("Listing berhasil disimpan!");
     listingForm.reset();
-    document.getElementById('editingKey').value='';
-    loadAdminList(); renderPublicList();
-  } catch(err){ console.error(err); alert("Gagal simpan listing: "+err); progressContainer.classList.add('hidden'); updateProgress(0); }
+    document.getElementById('editingKey').value = '';
+    loadAdminList();
+    renderPublicList();
+
+  } catch (err) {
+    console.error(err);
+    alert("Gagal simpan listing: " + err);
+    progressContainer.classList.add('hidden');
+    updateProgress(0);
+  }
 });
 
 // ======= LOAD ADMIN LIST =======
@@ -271,16 +301,15 @@ async function loadAdminList(){
       document.getElementById('listingFB').value=item.facebook;
       document.getElementById('listingIG').value=item.instagram;
       document.getElementById('editingKey').value=key;
-      adminModal.classList.remove('hidden');
     });
-    div.querySelector('.deleteBtn').addEventListener('click', async ()=>{
-      if(confirm('Hapus listing ini?')){ await remove(ref(db,'listings/'+key)); loadAdminList(); renderPublicList(); }
+    div.querySelector('.deleteBtn').addEventListener('click',async ()=>{
+      if(confirm("Hapus listing ini?")){ await remove(ref(db,'listings/'+key)); loadAdminList(); renderPublicList(); }
     });
     area.appendChild(div);
   });
 }
 
-// ======= RENDER PUBLIC LIST =======
+// ======= RENDER PUBLIC =======
 async function renderPublicList(){
   const area=document.getElementById('listArea'); area.innerHTML='';
   const snap=await get(ref(db,'listings')); if(!snap.exists()) return;
@@ -288,15 +317,16 @@ async function renderPublicList(){
   Object.keys(data).forEach(key=>{
     const item=data[key];
     const div=document.createElement('div');
-    div.className='border rounded p-3 bg-white shadow hover:shadow-md transition';
-    div.innerHTML=`<h3 class="font-semibold mb-1">${sanitizeHTML(item.title)}</h3>
-      <p class="text-sm mb-2">${sanitizeHTML(item.description)}</p>
-      <p class="text-xs text-gray-500 mb-2">Kecamatan: ${sanitizeHTML(item.kecamatan)}</p>
-      <p class="text-xs text-gray-500 mb-2">Harga: ${sanitizeHTML(item.price)}</p>
-      ${item.imageUrl?`<img src="${item.imageUrl}" class="w-full h-40 object-cover mb-2 rounded">`:''}
+    div.className='border rounded p-2';
+    div.innerHTML=`
+      ${item.imageUrl ? `<img src="${item.imageUrl}" alt="Gambar" class="w-full h-36 object-cover rounded mb-2">` : ''}
+      <h4 class="font-semibold">${sanitizeHTML(item.title)}</h4>
+      <p class="text-sm mb-1">${sanitizeHTML(item.description)}</p>
+      <p class="text-xs text-gray-500 mb-1">Kecamatan: ${sanitizeHTML(item.kecamatan)}</p>
+      <p class="font-bold mb-1">Harga: ${sanitizeHTML(item.price)}</p>
       <div class="flex gap-2 flex-wrap">
-        ${item.whatsapp?`<a href="https://wa.me/${item.whatsapp}" target="_blank" class="social-btn bg-green-500 text-white">WA</a>`:''}
-        ${item.facebook?`<a href="${item.facebook}" target="_blank" class="social-btn bg-blue-600 text-white">FB</a>`:''}
+        ${item.whatsapp?`<a href="https://wa.me/${item.whatsapp}" target="_blank" class="social-btn bg-green-600 text-white">WA</a>`:''}
+        ${item.facebook?`<a href="${item.facebook}" target="_blank" class="social-btn bg-blue-700 text-white">FB</a>`:''}
         ${item.instagram?`<a href="https://instagram.com/${item.instagram}" target="_blank" class="social-btn insta-grad">IG</a>`:''}
       </div>`;
     area.appendChild(div);
@@ -304,6 +334,5 @@ async function renderPublicList(){
 }
 renderPublicList();
 </script>
-
 </body>
 </html>
