@@ -136,6 +136,14 @@ window.addEventListener("scroll", () => {
 <div><label class="text-xs text-gray-600">Gambar</label><input id="listingImage" type="file" class="w-full mt-1 px-3 py-2 border rounded"></div>
 <input type="hidden" id="editingKey" value="">
 <button type="submit" class="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700">Simpan Listing</button>
+
+<div id="progressContainer" class="hidden w-full mt-3">
+  <div class="w-full bg-gray-200 rounded-full h-2.5">
+    <div id="progressBar" class="bg-green-500 h-2.5 rounded-full text-[10px] text-white text-center"
+         style="width:0%">0%</div>
+  </div>
+</div>
+
 </form>
 <hr class="my-4">
 <div id="adminListArea" class="space-y-2"></div>
@@ -189,6 +197,17 @@ async function uploadToCloudinary(file){
 const listingForm=document.getElementById('listingForm');
 listingForm.addEventListener('submit',async e=>{
   e.preventDefault();
+
+  // === Progress bar setup ===
+  const progressContainer = document.getElementById('progressContainer');
+  const progressBar = document.getElementById('progressBar');
+  function updateProgress(val){
+    progressBar.style.width = val + "%";
+    progressBar.textContent = val + "%";
+  }
+  progressContainer.classList.remove('hidden');
+  updateProgress(10);
+
   const title=sanitizeHTML(document.getElementById('listingTitle').value);
   const description=sanitizeHTML(document.getElementById('listingDesc').value);
   const kecamatan=sanitizeHTML(document.getElementById('listingKec').value);
@@ -198,26 +217,40 @@ listingForm.addEventListener('submit',async e=>{
   const instagram=sanitizeInstagramUsername(document.getElementById('listingIG').value);
   const imageFile=document.getElementById('listingImage').files[0];
   let imageUrl=null;
-  if(imageFile) imageUrl=await uploadToCloudinary(imageFile);
 
-  const editingKey=document.getElementById('editingKey').value;
-  const data={title,description,kecamatan,price,whatsapp,facebook,instagram};
-  if(imageUrl) data.imageUrl=imageUrl;
-
-  if(editingKey){ await set(ref(db,'listings/'+editingKey),data); }
-  else{
   try {
-    await push(ref(db,'listings'),data);
-    alert("Listing berhasil disimpan!");
-  } catch(err) {
-    alert("Gagal simpan listing: " + err.message);
-    console.error(err);
-  }
-}
+    if(imageFile){
+      updateProgress(40);
+      imageUrl=await uploadToCloudinary(imageFile);
+      updateProgress(70);
+    }
 
-  listingForm.reset(); document.getElementById('editingKey').value='';
-  loadAdminList(); renderPublicList();
+    const editingKey=document.getElementById('editingKey').value;
+    const data={title,description,kecamatan,price,whatsapp,facebook,instagram};
+    if(imageUrl) data.imageUrl=imageUrl;
+
+    if(editingKey){ 
+      await set(ref(db,'listings/'+editingKey),data); 
+    } else {
+      await push(ref(db,'listings'),data);
+    }
+
+    updateProgress(100);
+    setTimeout(()=>{ progressContainer.classList.add('hidden'); updateProgress(0); },1000);
+
+    alert("Listing berhasil disimpan!");
+    listingForm.reset(); 
+    document.getElementById('editingKey').value='';
+    loadAdminList(); renderPublicList();
+
+  } catch(err){
+    console.error("Error simpan listing:", err);
+    alert("Gagal simpan listing: " + err.message);
+    progressContainer.classList.add('hidden');
+    updateProgress(0);
+  }
 });
+
 
 // ======= LOAD ADMIN LIST =======
 async function loadAdminList(){
@@ -337,3 +370,4 @@ async function handleSearch(){
 </script>
 </body>
 </html>
+ 
