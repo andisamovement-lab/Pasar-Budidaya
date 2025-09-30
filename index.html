@@ -183,15 +183,35 @@ function openAdminPanel(){ adminModal.classList.remove('hidden'); loadAdminList(
 
 // ======= CLOUDINARY UPLOAD =======
 async function uploadToCloudinary(file){
-  const url='https://api.cloudinary.com/v1_1/doju1f65q/image/upload'; // ganti demo dengan cloud name
-  const preset='pasar_budidaya'; // ganti dengan unsigned preset milik
-  const formData=new FormData();
-  formData.append('file',file);
-  formData.append('upload_preset',preset);
-  const res=await fetch(url,{method:'POST',body:formData});
-  const data=await res.json();
-  return data.secure_url;
+  return new Promise((resolve,reject)=>{
+    const url = "https://api.cloudinary.com/v1_1/doju1f65q/image/upload";
+    const preset = "pasar_budidaya";
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", preset);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url, true);
+
+    xhr.upload.onprogress = (e) => {
+      if(e.lengthComputable){
+        const percent = Math.round((e.loaded / e.total) * 100);
+        document.getElementById("progressBar").style.width = percent+"%";
+        document.getElementById("progressBar").textContent = percent+"%";
+      }
+    };
+
+    xhr.onload = () => {
+      if(xhr.status === 200){
+        const res = JSON.parse(xhr.responseText);
+        resolve(res.secure_url);
+      } else reject("Upload gagal: " + xhr.statusText);
+    };
+    xhr.onerror = () => reject("Upload error");
+    xhr.send(formData);
+  });
 }
+
 
 // ======= ADD / EDIT LISTING =======
 const listingForm=document.getElementById('listingForm');
