@@ -227,46 +227,93 @@ async function uploadToCloudinary(file){
 
 // ======= ADD / EDIT LISTING =======
 const listingForm=document.getElementById('listingForm');
-listingForm.addEventListener('submit',async e=>{
+listingForm.addEventListener('submit', async e => {
   e.preventDefault();
   const progressContainer = document.getElementById('progressContainer');
   const progressBar = document.getElementById('progressBar');
+  
   function updateProgress(val){
     progressBar.style.width = val + "%";
     progressBar.textContent = val + "%";
   }
-  progressContainer.classList.remove('hidden');
-  updateProgress(10);
 
-  const title=sanitizeHTML(document.getElementById('listingTitle').value);
-  const description=sanitizeHTML(document.getElementById('listingDesc').value);
-  const kecamatan=sanitizeHTML(document.getElementById('listingKec').value);
-  const price=sanitizeHTML(document.getElementById('listingPrice').value);
-  const whatsapp=sanitizePhoneNumber(document.getElementById('listingWA').value);
-  const facebook=normalizeFacebookUrl(document.getElementById('listingFB').value);
-  const instagram=sanitizeInstagramUsername(document.getElementById('listingIG').value);
-  const imageFile=document.getElementById('listingImage').files[0];
-  let imageUrl=null;
+  progressContainer.classList.remove('hidden');
+  updateProgress(0);
+
+  const title = sanitizeHTML(document.getElementById('listingTitle').value);
+  const description = sanitizeHTML(document.getElementById('listingDesc').value);
+  const kecamatan = sanitizeHTML(document.getElementById('listingKec').value);
+  const price = sanitizeHTML(document.getElementById('listingPrice').value);
+  const whatsapp = sanitizePhoneNumber(document.getElementById('listingWA').value);
+  const facebook = normalizeFacebookUrl(document.getElementById('listingFB').value);
+  const instagram = sanitizeInstagramUsername(document.getElementById('listingIG').value);
+  const imageFile = document.getElementById('listingImage').files[0];
+  let imageUrl = null;
 
   try {
+    // Step 1: Upload image jika ada
     if(imageFile){
-      updateProgress(30);
-      imageUrl=await uploadToCloudinary(imageFile);
-      updateProgress(90);
+      updateProgress(10);
+      imageUrl = await new Promise((resolve, reject) => {
+        const url = "https://api.cloudinary.com/v1_1/doju1f65q/image/upload"; 
+        const preset = "pasar_budidaya"; 
+        const formData = new FormData();
+        formData.append("file", imageFile);
+        formData.append("upload_preset", preset);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", url, true);
+
+        xhr.upload.onprogress = (e) => {
+          if(e.lengthComputable){
+            const percent = Math.round((e.loaded / e.total) * 50); // 0~50% untuk upload
+            updateProgress(10 + percent); // mulai dari 10%
+          }
+        };
+
+        xhr.onload = () => {
+          if(xhr.status >= 200 && xhr.status < 300){
+            try{ resolve(JSON.parse(xhr.responseText).secure_url); } 
+            catch(err){ reject("Parse response error"); }
+          } else reject("Upload gagal: "+xhr.statusText);
+        };
+
+        xhr.onerror = () => reject("Upload error");
+        xhr.send(formData);
+      });
     }
 
-    const editingKey=document.getElementById('editingKey').value;
-    const data={title,description,kecamatan,price,whatsapp,facebook,instagram};
-    if(imageUrl) data.imageUrl=imageUrl;
+    // Step 2: Simpan data ke Firebase
+    updateProgress(60); // sebelum save
+    const editingKey = document.getElementById('editingKey').value;
+    const data = { title, description, kecamatan, price, whatsapp, facebook, instagram };
+    if(imageUrl) data.imageUrl = imageUrl;
 
-    if(editingKey){ await set(ref(db,'listings/'+editingKey),data); } 
-    else { await push(ref(db,'listings'),data); }
+    if(editingKey){
+      await set(ref(db,'listings/'+editingKey),data);
+    } else {
+      await push(ref(db,'listings'),data);
+    }
 
-    updateProgress(100);
-    setTimeout(()=>{ progressContainer.classList.add('hidden'); updateProgress(0); },1000);
+    // Step 3: Progress smooth 60 → 100% dalam 300ms
+    let prog = 60;
+    const interval = setInterval(()=>{
+      prog += 4; // naik 4% per frame
+      if(prog >= 100){ prog = 100; clearInterval(interval); }
+      updateProgress(prog);
+    }, 10);
+
+    setTimeout(()=>{
+      progressContainer.classList.add('hidden');
+      updateProgress(0);
+    }, 400); // sembunyikan progress setelah animasi selesai
+
     alert("Listing berhasil disimpan!");
-    listingForm.reset(); document.getElementById('editingKey').value='';
-    loadAdminList(); renderPublicList();
+    listingForm.reset();
+    document.getElementById('editingKey').value='';
+    loadAdminList();
+    renderPublicList();
+
   } catch(err){
     console.error("Error simpan listing:", err);
     alert("Gagal simpan listing: " + err);
@@ -274,6 +321,7 @@ listingForm.addEventListener('submit',async e=>{
     updateProgress(0);
   }
 });
+
 
 // ======= LOAD ADMIN LIST =======
 async function loadAdminList(){
