@@ -12,8 +12,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
 <style>
-.social-btn { display:inline-flex; align-items:center; gap:.5rem; padding:.35rem .5rem; border-radius:.45rem; }
-.social-btn svg { width:18px;height:18px; display:block; }
+.social-btn { display:inline-flex; align-items:center; gap:.5rem; padding:.35rem .5rem; border-radius:.45rem; font-size:10px; text-decoration:none; }
 .insta-grad {
   background: radial-gradient(circle at 30% 30%, #fccc63 0%, transparent 15%),
               linear-gradient(45deg,#f58529,#dd2a7b 30%,#8134af 60%,#515bd4 100%);
@@ -40,6 +39,7 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
 
+// global helper
 window.db = db; window.auth = auth;
 window.ref = ref; window.push = push; window.get = get; window.child = child; window.set = set; window.remove = remove; window.onValue = onValue;
 window.signInWithEmailAndPassword = signInWithEmailAndPassword; window.signOut = signOut;
@@ -98,7 +98,7 @@ window.addEventListener("scroll", () => {
 });
 </script>
 
-<!-- ======= LOGIN & ADMIN MODAL ======= -->
+<!-- LOGIN & ADMIN MODAL -->
 <div id="loginModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
 <div class="bg-white rounded-lg shadow-lg w-full max-w-md p-4">
 <div class="flex justify-between items-center mb-3">
@@ -133,14 +133,13 @@ window.addEventListener("scroll", () => {
 <div><label class="text-xs text-gray-600">WhatsApp</label><input id="listingWA" type="text" class="w-full mt-1 px-3 py-2 border rounded"></div>
 <div><label class="text-xs text-gray-600">Facebook</label><input id="listingFB" type="text" class="w-full mt-1 px-3 py-2 border rounded"></div>
 <div><label class="text-xs text-gray-600">Instagram</label><input id="listingIG" type="text" class="w-full mt-1 px-3 py-2 border rounded"></div>
-<div><label class="text-xs text-gray-600">Gambar</label><input id="listingImage" type="file" class="w-full mt-1 px-3 py-2 border rounded"></div>
+<div><label class="text-xs text-gray-600">Gambar</label><input id="listingImage" type="file" accept="image/*" class="w-full mt-1 px-3 py-2 border rounded"></div>
 <input type="hidden" id="editingKey" value="">
 <button type="submit" class="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700">Simpan Listing</button>
 
 <div id="progressContainer" class="hidden w-full mt-3">
   <div class="w-full bg-gray-200 rounded-full h-2.5">
-    <div id="progressBar" class="bg-green-500 h-2.5 rounded-full text-[10px] text-white text-center"
-         style="width:0%">0%</div>
+    <div id="progressBar" class="bg-green-500 h-2.5 rounded-full text-[10px] text-white text-center" style="width:0%">0%</div>
   </div>
 </div>
 
@@ -151,11 +150,11 @@ window.addEventListener("scroll", () => {
 </div>
 
 <script type="module">
-// ======= Helper Sanitasi =======
+// ======= HELPER =======
 function sanitizeHTML(str){ const div=document.createElement('div'); div.textContent=str; return div.innerHTML; }
 function normalizeFacebookUrl(url){ if(!url) return ''; if(!url.includes('facebook.com')) url='https://facebook.com/'+url.replace('@',''); return url; }
 function sanitizeInstagramUsername(user){ if(!user) return ''; return user.replace('@','').trim(); }
-function sanitizePhoneNumber(num){ return num.replace(/\D/g,''); }
+function sanitizePhoneNumber(num){ if(!num) return ''; return num.replace(/\D/g,''); }
 
 // ======= LOGIN =======
 const loginModal=document.getElementById('loginModal');
@@ -178,14 +177,13 @@ loginForm.addEventListener('submit',async e=>{
 // ======= ADMIN PANEL =======
 const adminModal=document.getElementById('adminModal');
 document.getElementById('closeAdmin').addEventListener('click',()=>adminModal.classList.add('hidden'));
-
 function openAdminPanel(){ adminModal.classList.remove('hidden'); loadAdminList(); }
 
-// ======= CLOUDINARY UPLOAD =======
+// ======= CLOUDINARY UPLOAD (SAFE UNSIGNED) =======
 async function uploadToCloudinary(file){
   return new Promise((resolve,reject)=>{
-    const url = "https://api.cloudinary.com/v1_1/doju1f65q/image/upload";
-    const preset = "pasar_budidaya";
+    const url = "https://api.cloudinary.com/v1_1/doju1f65q/image/upload"; // unsigned
+    const preset = "pasar_budidaya"; // unsigned upload preset
     const formData = new FormData();
     formData.append("file", file);
     formData.append("upload_preset", preset);
@@ -193,32 +191,34 @@ async function uploadToCloudinary(file){
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url, true);
 
+    // progress update
     xhr.upload.onprogress = (e) => {
       if(e.lengthComputable){
         const percent = Math.round((e.loaded / e.total) * 100);
-        document.getElementById("progressBar").style.width = percent+"%";
-        document.getElementById("progressBar").textContent = percent+"%";
+        const progressBar = document.getElementById("progressBar");
+        progressBar.style.width = percent+"%";
+        progressBar.textContent = percent+"%";
       }
     };
 
     xhr.onload = () => {
-      if(xhr.status === 200){
-        const res = JSON.parse(xhr.responseText);
-        resolve(res.secure_url);
-      } else reject("Upload gagal: " + xhr.statusText);
+      if(xhr.status >= 200 && xhr.status < 300){
+        try{
+          const res = JSON.parse(xhr.responseText);
+          resolve(res.secure_url);
+        } catch(err){ reject("Parse response error"); }
+      } else reject("Upload gagal: "+xhr.statusText);
     };
+
     xhr.onerror = () => reject("Upload error");
     xhr.send(formData);
   });
 }
 
-
 // ======= ADD / EDIT LISTING =======
 const listingForm=document.getElementById('listingForm');
 listingForm.addEventListener('submit',async e=>{
   e.preventDefault();
-
-  // === Progress bar setup ===
   const progressContainer = document.getElementById('progressContainer');
   const progressBar = document.getElementById('progressBar');
   function updateProgress(val){
@@ -240,154 +240,117 @@ listingForm.addEventListener('submit',async e=>{
 
   try {
     if(imageFile){
-      updateProgress(40);
+      updateProgress(30);
       imageUrl=await uploadToCloudinary(imageFile);
-      updateProgress(70);
+      updateProgress(80);
     }
 
     const editingKey=document.getElementById('editingKey').value;
     const data={title,description,kecamatan,price,whatsapp,facebook,instagram};
     if(imageUrl) data.imageUrl=imageUrl;
 
-    if(editingKey){ 
-      await set(ref(db,'listings/'+editingKey),data); 
-    } else {
-      await push(ref(db,'listings'),data);
-    }
+    if(editingKey){ await set(ref(db,'listings/'+editingKey),data); } 
+    else { await push(ref(db,'listings'),data); }
 
     updateProgress(100);
     setTimeout(()=>{ progressContainer.classList.add('hidden'); updateProgress(0); },1000);
-
     alert("Listing berhasil disimpan!");
-    listingForm.reset(); 
-    document.getElementById('editingKey').value='';
+    listingForm.reset(); document.getElementById('editingKey').value='';
     loadAdminList(); renderPublicList();
-
   } catch(err){
     console.error("Error simpan listing:", err);
-    alert("Gagal simpan listing: " + err.message);
+    alert("Gagal simpan listing: " + err);
     progressContainer.classList.add('hidden');
     updateProgress(0);
   }
 });
 
-
 // ======= LOAD ADMIN LIST =======
 async function loadAdminList(){
-  const area = document.getElementById('adminListArea'); 
-  area.innerHTML = '';
-
-  const snap = await get(ref(db, 'listings'));
-  if (!snap.exists()) return;
-
+  const area = document.getElementById('adminListArea'); area.innerHTML='';
+  const snap = await get(ref(db, 'listings')); if(!snap.exists()) return;
   const data = snap.val();
   Object.keys(data).forEach(key => {
     const item = data[key];
     const div = document.createElement('div');
     div.className = 'border rounded p-2 flex justify-between items-center';
-    div.innerHTML = `
-      <span>${sanitizeHTML(item.title)}</span>
+    div.innerHTML = `<span>${sanitizeHTML(item.title)}</span>
       <div class="flex gap-1">
         <button class="px-2 py-1 bg-yellow-400 text-white rounded text-xs editBtn">Edit</button>
         <button class="px-2 py-1 bg-red-600 text-white rounded text-xs deleteBtn">Hapus</button>
       </div>`;
-    
-    // Edit
-    div.querySelector('.editBtn').addEventListener('click', () => {
-      document.getElementById('listingTitle').value = item.title;
-      document.getElementById('listingDesc').value = item.description;
-      document.getElementById('listingKec').value = item.kecamatan;
-      document.getElementById('listingPrice').value = item.price;
-      document.getElementById('listingWA').value = item.whatsapp || '';
-      document.getElementById('listingFB').value = item.facebook || '';
-      document.getElementById('listingIG').value = item.instagram || '';
-      document.getElementById('editingKey').value = key;
+    div.querySelector('.editBtn').addEventListener('click', ()=>{
+      document.getElementById('listingTitle').value=item.title;
+      document.getElementById('listingDesc').value=item.description;
+      document.getElementById('listingKec').value=item.kecamatan;
+      document.getElementById('listingPrice').value=item.price;
+      document.getElementById('listingWA').value=item.whatsapp;
+      document.getElementById('listingFB').value=item.facebook;
+      document.getElementById('listingIG').value=item.instagram;
+      document.getElementById('editingKey').value=key;
+      adminModal.scrollTop = 0;
     });
-
-    // Hapus
-    div.querySelector('.deleteBtn').addEventListener('click', async () => {
-      if (confirm('Hapus listing ini?')) {
-        await remove(ref(db, 'listings/' + key));
-        loadAdminList();
+    div.querySelector('.deleteBtn').addEventListener('click', async ()=>{
+      if(confirm("Yakin ingin hapus?")){
+        await remove(ref(db,'listings/'+key));
+        loadAdminList(); renderPublicList();
       }
     });
-
     area.appendChild(div);
   });
 }
 
-
 // ======= RENDER PUBLIC LIST =======
-function renderPublicList(){
-  const listArea = document.getElementById('listArea');
-
-  onValue(ref(db, 'listings'), (snap) => {
-    listArea.innerHTML = '';
-    if (!snap.exists()) return;
-
-    const data = snap.val();
-    Object.keys(data).forEach(key => {
-      const item = data[key];
-      const card = document.createElement('div');
-      card.className = 'border rounded-lg p-3 bg-white shadow';
-      card.innerHTML = `
-        <img src="${item.imageUrl || 'https://iili.io/K0Uz11e.md.png'}" 
-             alt="${sanitizeHTML(item.title)}" 
-             class="w-full h-40 object-cover rounded mb-2">
-        <h3 class="font-semibold">${sanitizeHTML(item.title)}</h3>
-        <p class="text-sm">${sanitizeHTML(item.description)}</p>
-        <p class="text-xs text-gray-500">Kecamatan: ${sanitizeHTML(item.kecamatan)} | Harga: ${sanitizeHTML(item.price)}</p>
-        <div class="flex gap-2 mt-2">
-          ${item.whatsapp ? `<a href="https://wa.me/${sanitizePhoneNumber(item.whatsapp)}" target="_blank" class="social-btn bg-green-100 text-green-700">WA</a>` : ''}
-          ${item.facebook ? `<a href="${normalizeFacebookUrl(item.facebook)}" target="_blank" class="social-btn bg-blue-100 text-blue-700">FB</a>` : ''}
-          ${item.instagram ? `<a href="https://instagram.com/${sanitizeInstagramUsername(item.instagram)}" target="_blank" class="social-btn insta-grad">IG</a>` : ''}
-        </div>`;
-      listArea.appendChild(card);
-    });
+async function renderPublicList(){
+  const area = document.getElementById('listArea'); area.innerHTML='';
+  const snap = await get(ref(db,'listings')); if(!snap.exists()) return;
+  const data = snap.val();
+  Object.keys(data).forEach(key => {
+    const item = data[key];
+    const div = document.createElement('div');
+    div.className = 'border rounded p-3 bg-white shadow';
+    div.innerHTML = `
+      ${item.imageUrl? `<img src="${item.imageUrl}" class="w-full h-48 object-cover mb-2 rounded">` : ''}
+      <h3 class="font-semibold">${sanitizeHTML(item.title)}</h3>
+      <p class="text-xs text-gray-600">${sanitizeHTML(item.description)}</p>
+      <p class="text-sm font-medium mt-1">Kecamatan: ${sanitizeHTML(item.kecamatan)}</p>
+      <p class="text-sm font-medium mt-1">Harga: ${sanitizeHTML(item.price)}</p>
+      <div class="flex gap-2 mt-2">
+        ${item.whatsapp? `<a href="https://wa.me/${item.whatsapp}" target="_blank" class="px-2 py-1 bg-green-600 text-white text-xs rounded">WA</a>` : ''}
+        ${item.facebook? `<a href="${item.facebook}" target="_blank" class="px-2 py-1 bg-blue-600 text-white text-xs rounded">FB</a>` : ''}
+        ${item.instagram? `<a href="https://instagram.com/${item.instagram}" target="_blank" class="px-2 py-1 bg-pink-500 text-white text-xs rounded">IG</a>` : ''}
+      </div>`;
+    area.appendChild(div);
   });
 }
-
-// panggil sekali waktu halaman load
 renderPublicList();
 
-
 // ======= SEARCH =======
-document.getElementById('searchBtn').addEventListener('click',handleSearch);
-document.getElementById('searchInput').addEventListener('keypress',e=>{if(e.key==='Enter') handleSearch();});
-async function handleSearch(){
-  const query=document.getElementById('searchInput').value.toLowerCase().trim();
-  const listArea=document.getElementById('listArea'); 
-  listArea.innerHTML='';
-
-  const snap=await get(ref(db, 'listings')); // ✅ perbaikan di sini
-  if(!snap.exists()) return;
-
-  const data=snap.val();
+document.getElementById('searchBtn').addEventListener('click', async ()=>{
+  const term = document.getElementById('searchInput').value.toLowerCase();
+  const area = document.getElementById('listArea'); area.innerHTML='';
+  const snap = await get(ref(db,'listings')); if(!snap.exists()) return;
+  const data = snap.val();
   Object.keys(data).forEach(key=>{
-    const item=data[key];
-    const title=(item.title||'').toLowerCase();
-    const description=(item.description||'').toLowerCase();
-    const kecamatan=(item.kecamatan||'').toLowerCase();
-
-    if(title.includes(query)||description.includes(query)||kecamatan.includes(query)){
-      const card=document.createElement('div');
-      card.className='border rounded-lg p-3 bg-white shadow';
-      card.innerHTML=`
-      <img src="${item.imageUrl||'https://iili.io/K0Uz11e.md.png'}" alt="${item.title}" class="w-full h-40 object-cover rounded mb-2">
-      <h3 class="font-semibold">${sanitizeHTML(item.title)}</h3>
-      <p class="text-sm">${sanitizeHTML(item.description)}</p>
-      <p class="text-xs text-gray-500">Kecamatan: ${sanitizeHTML(item.kecamatan)} | Harga: ${sanitizeHTML(item.price)}</p>
-      <div class="flex gap-2 mt-2">
-        ${item.whatsapp?`<a href="https://wa.me/${sanitizePhoneNumber(item.whatsapp)}" target="_blank" class="social-btn bg-green-100 text-green-700">WA</a>`:''}
-        ${item.facebook?`<a href="${normalizeFacebookUrl(item.facebook)}" target="_blank" class="social-btn bg-blue-100 text-blue-700">FB</a>`:''}
-        ${item.instagram?`<a href="https://instagram.com/${sanitizeInstagramUsername(item.instagram)}" target="_blank" class="social-btn insta-grad">IG</a>`:''}
-      </div>`;
-      listArea.appendChild(card);
+    const item = data[key];
+    if(item.title.toLowerCase().includes(term) || item.description.toLowerCase().includes(term) || item.kecamatan.toLowerCase().includes(term)){
+      const div = document.createElement('div');
+      div.className = 'border rounded p-3 bg-white shadow';
+      div.innerHTML = `
+        ${item.imageUrl? `<img src="${item.imageUrl}" class="w-full h-48 object-cover mb-2 rounded">` : ''}
+        <h3 class="font-semibold">${sanitizeHTML(item.title)}</h3>
+        <p class="text-xs text-gray-600">${sanitizeHTML(item.description)}</p>
+        <p class="text-sm font-medium mt-1">Kecamatan: ${sanitizeHTML(item.kecamatan)}</p>
+        <p class="text-sm font-medium mt-1">Harga: ${sanitizeHTML(item.price)}</p>
+        <div class="flex gap-2 mt-2">
+          ${item.whatsapp? `<a href="https://wa.me/${item.whatsapp}" target="_blank" class="px-2 py-1 bg-green-600 text-white text-xs rounded">WA</a>` : ''}
+          ${item.facebook? `<a href="${item.facebook}" target="_blank" class="px-2 py-1 bg-blue-600 text-white text-xs rounded">FB</a>` : ''}
+          ${item.instagram? `<a href="https://instagram.com/${item.instagram}" target="_blank" class="px-2 py-1 bg-pink-500 text-white text-xs rounded">IG</a>` : ''}
+        </div>`;
+      area.appendChild(div);
     }
   });
-}
-
+});
 </script>
 </body>
 </html>
- 
