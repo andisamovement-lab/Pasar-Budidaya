@@ -368,8 +368,8 @@ function renderPublicList(){
     div.innerHTML=`
       ${item.imageUrl?`<img src="${item.imageUrl}" class="w-full h-32 object-cover rounded">`:''}
       <div class="font-semibold">${sanitizeHTML(item.title)}</div>
-      <div class="text-sm text-gray-600">${sanitizeHTML(item.price + ' · ' : '')}${sanitizeHTML(item.kecamatan)}</div>
-      <div class="text-sm text-gray-700">${sanitizeHTML(item.description)}</div>
+      <div class="text-sm text-gray-600">${sanitizeHTML(item.description)}</div>
+      <div class="text-sm font-bold">Harga: ${sanitizeHTML(item.price)}</div>
       <div class="flex gap-2 text-xs mt-1">
         ${waBtn}
         ${fbBtn}
