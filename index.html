@@ -5,10 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Pasar Budidaya — Menghubungkan petani dan peternak ke khalayak ramai</title>
 <meta name="description" content="Pasar Budidaya — marketplace sederhana untuk menghubungkan petani & peternak dengan pembeli.">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://www.gstatic.com https://cdn.tailwindcss.com https://cdn.emailjs.com https://iili.io https://res.cloudinary.com; script-src 'self' https://www.gstatic.com https://cdn.tailwindcss.com https://cdn.emailjs.com 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; img-src 'self' data: https://iili.io https://res.cloudinary.com https://lh3.googleusercontent.com https://drive.google.com; connect-src 'self' https://*.firebaseio.com https://api.cloudinary.com https://pasar-budidaya-default-rtdb.asia-southeast1.firebasedatabase.app https://andisamovement-lab.github.io https://www.googleapis.com https://cdn.emailjs.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-ancestors 'none'; base-uri 'self';">
-<meta http-equiv="X-Content-Type-Options" content="nosniff">
-<meta name="referrer" content="strict-origin-when-cross-origin">
-<meta name="permissions-policy" content="geolocation=(), camera=(), microphone=()">
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
 <style>
@@ -23,7 +19,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-import { getDatabase, ref, set, push, get, child, remove, onValue } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+import { getDatabase, ref, set, push, get, child, remove } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
 
 // === KONFIGURASI FIREBASE ===
 const firebaseConfig = {
@@ -39,14 +35,10 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
 
-// global helper
-window.db = db; window.auth = auth;
-window.ref = ref; window.push = push; window.get = get; window.child = child; window.set = set; window.remove = remove; window.onValue = onValue;
-window.signInWithEmailAndPassword = signInWithEmailAndPassword; window.signOut = signOut;
-</script>
-<script src="https://cdn.emailjs.com/dist/email.min.js"></script>
-<script>
-(function(){ if(window.emailjs){ try{ emailjs.init("dMNd-zY7JPRieDdO6"); } catch(e){ console.warn('EmailJS init failed') } } })();
+// Global helper
+window.db=db; window.auth=auth;
+window.ref=ref; window.push=push; window.get=get; window.child=child; window.set=set; window.remove=remove;
+window.signInWithEmailAndPassword=signInWithEmailAndPassword; window.signOut=signOut;
 </script>
 </head>
 <body class="bg-gray-50 text-gray-900 min-h-screen flex flex-col">
@@ -80,24 +72,6 @@ window.signInWithEmailAndPassword = signInWithEmailAndPassword; window.signOut =
 <div class="max-w-6xl mx-auto px-4 text-center text-sm">&copy; 2025 Andisa Movement. Untuk info lebih lanjut hubungi 0831-6159-3659.</div>
 </footer>
 
-<script>
-// ======= HEADER & MARGIN =======
-function adjustMainMargin() {
-  const header = document.getElementById("siteHeader");
-  const main = document.getElementById("mainContent");
-  main.style.marginTop = header.offsetHeight + "px";
-  const footer = document.querySelector("footer");
-  main.style.marginBottom = footer.offsetHeight + "px";
-}
-adjustMainMargin();
-window.addEventListener("resize", adjustMainMargin);
-const header = document.getElementById("siteHeader");
-window.addEventListener("scroll", () => {
-  if (window.scrollY > 50) header.classList.add("bg-white/80", "backdrop-blur-sm", "shadow-lg");
-  else header.classList.remove("bg-white/80", "backdrop-blur-sm", "shadow-lg");
-});
-</script>
-
 <!-- LOGIN & ADMIN MODAL -->
 <div id="loginModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
 <div class="bg-white rounded-lg shadow-lg w-full max-w-md p-4">
@@ -123,6 +97,7 @@ window.addEventListener("scroll", () => {
 <div class="bg-white rounded-lg shadow-lg w-full max-w-lg p-4 overflow-y-auto max-h-[90vh]">
 <div class="flex justify-between items-center mb-3">
 <h3 class="text-lg font-semibold">Admin Panel</h3>
+<input id="adminSearchInput" type="text" placeholder="Cari listing..." class="px-2 py-1 border rounded text-sm w-1/2">
 <button id="closeAdmin" class="text-gray-500 hover:text-gray-700">×</button>
 </div>
 <form id="listingForm" class="space-y-3">
@@ -137,12 +112,12 @@ window.addEventListener("scroll", () => {
 <input type="hidden" id="editingKey" value="">
 <button type="submit" class="w-full py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700">Simpan Listing</button>
 
-<div id="progressContainer" class="hidden w-full mt-3">
+<div id="progressContainer" class="hidden w-full mt-1">
+  <div id="progressText" class="text-[5px] text-gray-600 mb-1">Menunggu...</div>
   <div class="w-full bg-gray-200 rounded-full h-2.5">
     <div id="progressBar" class="bg-green-500 h-2.5 rounded-full text-[10px] text-white text-center" style="width:0%">0%</div>
   </div>
 </div>
-
 </form>
 <hr class="my-4">
 <div id="adminListArea" class="space-y-2"></div>
@@ -177,6 +152,7 @@ loginForm.addEventListener('submit',async e=>{
 // ======= ADMIN PANEL =======
 const adminModal=document.getElementById('adminModal');
 document.getElementById('closeAdmin').addEventListener('click',()=>adminModal.classList.add('hidden'));
+let localAdminData={}; // simpan data lokal
 function openAdminPanel(){ adminModal.classList.remove('hidden'); loadAdminList(); }
 
 // ======= CLOUDINARY UPLOAD =======
@@ -209,19 +185,16 @@ async function uploadToCloudinary(file, progressCallback){
 
 // ======= ADD / EDIT LISTING =======
 const listingForm=document.getElementById('listingForm');
+const progressContainer=document.getElementById('progressContainer');
+const progressBar=document.getElementById('progressBar');
+const progressText=document.getElementById('progressText');
+
+function updateProgress(val,text){ progressBar.style.width=val+'%'; progressBar.textContent=val+'%'; if(text) progressText.textContent=text; }
+
 listingForm.addEventListener('submit', async e => {
   e.preventDefault();
-  
-  const progressContainer = document.getElementById('progressContainer');
-  const progressBar = document.getElementById('progressBar');
-  
-  function updateProgress(val) {
-    progressBar.style.width = val + "%";
-    progressBar.textContent = val + "%";
-  }
-  
+  updateProgress(0,'Memulai...');
   progressContainer.classList.remove('hidden');
-  updateProgress(0);
 
   const title = sanitizeHTML(document.getElementById('listingTitle').value);
   const description = sanitizeHTML(document.getElementById('listingDesc').value);
@@ -233,58 +206,46 @@ listingForm.addEventListener('submit', async e => {
   const imageFile = document.getElementById('listingImage').files[0];
   let imageUrl = null;
 
-  try {
-    // Upload gambar jika ada
-    if (imageFile) {
-      imageUrl = await uploadToCloudinary(imageFile, (percent) => {
-        // Upload progress 0–80%
-        updateProgress(Math.round(percent * 0.8));
-      });
+  try{
+    if(imageFile){
+      updateProgress(0,'Upload gambar...');
+      imageUrl = await uploadToCloudinary(imageFile,(percent)=>{ updateProgress(Math.round(percent*0.8),'Upload gambar...'); });
     }
 
-    // Setelah upload selesai
-    updateProgress(80);
-
+    updateProgress(80,'Menyimpan data ke database...');
     const editingKey = document.getElementById('editingKey').value;
     const data = { title, description, kecamatan, price };
-    if (whatsapp) data.whatsapp = whatsapp;
-    if (facebook) data.facebook = facebook;
-    if (instagram) data.instagram = instagram;
-    if (imageUrl) data.imageUrl = imageUrl;
+    if(whatsapp) data.whatsapp=whatsapp;
+    if(facebook) data.facebook=facebook;
+    if(instagram) data.instagram=instagram;
+    if(imageUrl) data.imageUrl=imageUrl;
 
-    // Simpan ke Firebase Realtime Database
-    if (editingKey) await set(ref(db, 'listings/' + editingKey), data);
-    else await push(ref(db, 'listings'), data);
+    let key=null;
+    if(editingKey){ await set(ref(db,'listings/'+editingKey),data); key=editingKey; localAdminData[key]=data; }
+    else{ const newRef=await push(ref(db,'listings'),data); key=newRef.key; localAdminData[key]=data; }
 
-    // Update progres ke 100%
-    updateProgress(100);
+    updateProgress(100,'Selesai');
+    setTimeout(()=>{ progressContainer.classList.add('hidden'); updateProgress(0,''); },500);
 
-    setTimeout(() => {
-      progressContainer.classList.add('hidden');
-      updateProgress(0);
-    }, 500);
-
-    alert("Listing berhasil disimpan!");
+    alert('Listing berhasil disimpan!');
     listingForm.reset();
-    document.getElementById('editingKey').value = '';
-    loadAdminList();
+    document.getElementById('editingKey').value='';
+    renderAdminList();
     renderPublicList();
 
-  } catch (err) {
-    console.error(err);
-    alert("Gagal simpan listing: " + err);
-    progressContainer.classList.add('hidden');
-    updateProgress(0);
-  }
+  }catch(err){ console.error(err); alert('Gagal simpan listing: '+err); progressContainer.classList.add('hidden'); updateProgress(0,''); }
 });
 
 // ======= LOAD ADMIN LIST =======
 async function loadAdminList(){
+  const snap = await get(ref(db,'listings'));
+  localAdminData = snap.exists()?snap.val():{};
+  renderAdminList();
+}
+function renderAdminList(){
   const area=document.getElementById('adminListArea'); area.innerHTML='';
-  const snap=await get(ref(db,'listings')); if(!snap.exists()) return;
-  const data=snap.val();
-  Object.keys(data).forEach(key=>{
-    const item=data[key];
+  Object.keys(localAdminData).forEach(key=>{
+    const item=localAdminData[key];
     const div=document.createElement('div');
     div.className='border rounded p-2 flex justify-between items-center';
     div.innerHTML=`<span>${sanitizeHTML(item.title)}</span>
@@ -303,36 +264,80 @@ async function loadAdminList(){
       document.getElementById('editingKey').value=key;
     });
     div.querySelector('.deleteBtn').addEventListener('click',async ()=>{
-      if(confirm("Hapus listing ini?")){ await remove(ref(db,'listings/'+key)); loadAdminList(); renderPublicList(); }
+      if(confirm("Hapus listing ini?")){
+        await remove(ref(db,'listings/'+key));
+        delete localAdminData[key];
+        renderAdminList();
+        renderPublicList();
+      }
     });
     area.appendChild(div);
   });
 }
 
-// ======= RENDER PUBLIC =======
-async function renderPublicList(){
-  const area=document.getElementById('listArea'); area.innerHTML='';
-  const snap=await get(ref(db,'listings')); if(!snap.exists()) return;
-  const data=snap.val();
-  Object.keys(data).forEach(key=>{
-    const item=data[key];
+// ======= ADMIN SEARCH =======
+document.getElementById('adminSearchInput').addEventListener('input',e=>{
+  const q=e.target.value.toLowerCase();
+  const area=document.getElementById('adminListArea'); area.innerHTML='';
+  Object.keys(localAdminData).filter(k=>localAdminData[k].title.toLowerCase().includes(q) || localAdminData[k].description.toLowerCase().includes(q) || localAdminData[k].kecamatan.toLowerCase().includes(q))
+  .forEach(key=>{
+    const item=localAdminData[key];
     const div=document.createElement('div');
-    div.className='border rounded p-2';
+    div.className='border rounded p-2 flex justify-between items-center';
+    div.innerHTML=`<span>${sanitizeHTML(item.title)}</span>
+      <div class="flex gap-1">
+        <button class="px-2 py-1 bg-yellow-400 text-white rounded text-xs editBtn">Edit</button>
+        <button class="px-2 py-1 bg-red-600 text-white rounded text-xs deleteBtn">Hapus</button>
+      </div>`;
+    div.querySelector('.editBtn').addEventListener('click',()=>{
+      document.getElementById('listingTitle').value=item.title;
+      document.getElementById('listingDesc').value=item.description;
+      document.getElementById('listingKec').value=item.kecamatan;
+      document.getElementById('listingPrice').value=item.price;
+      document.getElementById('listingWA').value=item.whatsapp;
+      document.getElementById('listingFB').value=item.facebook;
+      document.getElementById('listingIG').value=item.instagram;
+      document.getElementById('editingKey').value=key;
+    });
+    div.querySelector('.deleteBtn').addEventListener('click',async ()=>{
+      if(confirm("Hapus listing ini?")){
+        await remove(ref(db,'listings/'+key));
+        delete localAdminData[key];
+        renderAdminList();
+        renderPublicList();
+      }
+    });
+    area.appendChild(div);
+  });
+});
+
+// ======= PUBLIC LIST RENDER =======
+function renderPublicList(){
+  const area=document.getElementById('listArea'); area.innerHTML='';
+  Object.keys(localAdminData).forEach(key=>{
+    const item=localAdminData[key];
+    const div=document.createElement('div');
+    div.className='border rounded p-3 bg-white shadow-sm flex flex-col gap-1';
     div.innerHTML=`
-      ${item.imageUrl ? `<img src="${item.imageUrl}" alt="Gambar" class="w-full h-36 object-cover rounded mb-2">` : ''}
-      <h4 class="font-semibold">${sanitizeHTML(item.title)}</h4>
-      <p class="text-sm mb-1">${sanitizeHTML(item.description)}</p>
-      <p class="text-xs text-gray-500 mb-1">Kecamatan: ${sanitizeHTML(item.kecamatan)}</p>
-      <p class="font-bold mb-1">Harga: ${sanitizeHTML(item.price)}</p>
-      <div class="flex gap-2 flex-wrap">
-        ${item.whatsapp?`<a href="https://wa.me/${item.whatsapp}" target="_blank" class="social-btn bg-green-600 text-white">WA</a>`:''}
-        ${item.facebook?`<a href="${item.facebook}" target="_blank" class="social-btn bg-blue-700 text-white">FB</a>`:''}
-        ${item.instagram?`<a href="https://instagram.com/${item.instagram}" target="_blank" class="social-btn insta-grad">IG</a>`:''}
+      ${item.imageUrl?`<img src="${item.imageUrl}" class="w-full h-32 object-cover rounded">`:''}
+      <div class="font-semibold">${sanitizeHTML(item.title)}</div>
+      <div class="text-sm text-gray-600">${sanitizeHTML(item.description)}</div>
+      <div class="text-sm font-bold">Harga: ${sanitizeHTML(item.price)}</div>
+      <div class="flex gap-2 text-xs mt-1">
+        ${item.whatsapp?`<a href="https://wa.me/${item.whatsapp}" target="_blank" class="px-2 py-1 bg-green-500 text-white rounded">WA</a>`:''}
+        ${item.facebook?`<a href="${item.facebook}" target="_blank" class="px-2 py-1 bg-blue-600 text-white rounded">FB</a>`:''}
+        ${item.instagram?`<a href="https://instagram.com/${item.instagram}" target="_blank" class="px-2 py-1 insta-grad rounded">IG</a>`:''}
       </div>`;
     area.appendChild(div);
   });
 }
-renderPublicList();
+
+// ======= INIT =======
+window.addEventListener('load',async ()=>{
+  const snap = await get(ref(db,'listings'));
+  localAdminData = snap.exists()?snap.val():{};
+  renderPublicList();
+});
 </script>
 </body>
 </html>
