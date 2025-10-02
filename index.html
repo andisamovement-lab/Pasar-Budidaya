@@ -95,7 +95,7 @@ window.signInWithEmailAndPassword=signInWithEmailAndPassword; window.signOut=sig
     <div class="text-xs text-gray-600 text-center">Menghubungkan petani dan peternak ke khalayak ramai</div>
   </div>
   <div class="flex items-center gap-3 w-full md:w-auto justify-end">
-    <input id="searchInput" type="search" placeholder="Cari: judul, deskripsi, kecamatan..." class="flex-1 md:w-72 px-3 py-2 border rounded-lg text-sm" />
+    <input id="searchInput" type="search" placeholder="Cari: judul, deskripsi, lokasi..." class="flex-1 md:w-72 px-3 py-2 border rounded-lg text-sm" />
     <button id="searchBtn" class="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700">Cari</button>
   </div>
 </div>
@@ -145,7 +145,7 @@ window.signInWithEmailAndPassword=signInWithEmailAndPassword; window.signOut=sig
 <form id="listingForm" class="space-y-3">
 <div><label class="text-xs text-gray-600">Judul</label><input id="listingTitle" type="text" class="w-full mt-1 px-3 py-2 border rounded" required></div>
 <div><label class="text-xs text-gray-600">Deskripsi</label><textarea id="listingDesc" class="w-full mt-1 px-3 py-2 border rounded" required></textarea></div>
-<div><label class="text-xs text-gray-600">Kecamatan</label><input id="listingKec" type="text" class="w-full mt-1 px-3 py-2 border rounded" required></div>
+<div><label class="text-xs text-gray-600">Lokasi</label><input id="listingKec" type="text" class="w-full mt-1 px-3 py-2 border rounded" required></div>
 <div><label class="text-xs text-gray-600">Harga</label><input id="listingPrice" type="text" class="w-full mt-1 px-3 py-2 border rounded" required></div>
 <div><label class="text-xs text-gray-600">WhatsApp</label><input id="listingWA" type="text" class="w-full mt-1 px-3 py-2 border rounded"></div>
 <div><label class="text-xs text-gray-600">Facebook</label><input id="listingFB" type="text" class="w-full mt-1 px-3 py-2 border rounded"></div>
@@ -420,9 +420,10 @@ function filterPublicList(query){
     })
     .forEach(key=>{
       const item=localAdminData[key];
-    const div=document.createElement('div');
-    div.className='listing-card border rounded p-3 bg-white shadow-sm flex flex-col gap-1';
-    // build contact buttons markup with inline SVGs (logos)
+      const div=document.createElement('div');
+      div.className='listing-card border rounded p-3 bg-white shadow-sm flex flex-col gap-1';
+
+      // build contact buttons markup with inline SVGs (logos)
     const waBtn = item.whatsapp ? `<a href="https://wa.me/${item.whatsapp}" target="_blank" class="social-btn social-btn--wa text-white rounded" aria-label="WhatsApp" title="WhatsApp">
         <span class="visually-hidden">WhatsApp</span>
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -444,33 +445,41 @@ function filterPublicList(query){
           <path fill="currentColor" d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5zm0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7zm5 3.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 .001 5.001A2.5 2.5 0 0 0 12 9.5zM17.8 6.2a.9.9 0 1 1-1.8 0 .9.9 0 0 1 1.8 0z"/>
         </svg>
       </a>` : '';
+      div.innerHTML=`
+        ${item.imageUrl?`<img src="${item.imageUrl}" class="w-full h-32 object-cover rounded">`:''}
+        <div class="font-semibold">${sanitizeHTML(item.title)}</div>
+        <div class="text-sm text-gray-600">${sanitizeHTML(item.price)} · ${sanitizeHTML(item.kecamatan)}</div>
+        <div class="text-sm text-gray-700">${sanitizeHTML(item.description)}</div>
+        <div class="flex gap-2 text-xs mt-1">
+          ${waBtn}
+          ${fbBtn}
+          ${igBtn}
+        </div>`;
+      area.appendChild(div);
+    });
+}
 
-    div.innerHTML=`
-      ${item.imageUrl?`<img src="${item.imageUrl}" class="w-full h-32 object-cover rounded">`:''}
-      <div class="font-semibold">${sanitizeHTML(item.title)}</div>
-      <div class="text-sm text-gray-600">${sanitizeHTML(item.price)} · ${sanitizeHTML(item.kecamatan)}</div>
-      <div class="text-sm text-gray-700">${sanitizeHTML(item.description)}</div>
-      <div class="flex gap-2 text-xs mt-1">
-        ${waBtn}
-        ${fbBtn}
-        ${igBtn}
-      </div>`;
-    area.appendChild(div);
-  });
-
-// Realtime (ketik langsung)
-searchInput.addEventListener('input',()=>{
+// Real-time search (tanpa klik tombol)
+searchInput.addEventListener('input', ()=>{
   const q = searchInput.value.toLowerCase();
   filterPublicList(q);
 });
 
 // Klik tombol Cari
-searchBtn.addEventListener('click',()=>{
+searchBtn.addEventListener('click', ()=>{
   const q = searchInput.value.toLowerCase();
   filterPublicList(q);
 });
 
-}
+// Tekan Enter di kolom input
+searchInput.addEventListener('keypress', (e)=>{
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    const q = searchInput.value.toLowerCase();
+    filterPublicList(q);
+  }
+});
+
 </script>
 
 <script>
@@ -486,9 +495,7 @@ searchBtn.addEventListener('click',()=>{
   adjustMainPadding();
   window.addEventListener("resize", adjustMainPadding);
 });
-</script>
 
-<script>
     window.addEventListener("scroll", function() {
   const header = document.getElementById("siteHeader");
   if (window.scrollY > 50) {
